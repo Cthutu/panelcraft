@@ -458,14 +458,16 @@
     }
     :root { --update-fill:#ffe5a1; --update-ink:#543000; --update-edge:#ac6800; }
     :root[data-theme="dark"] { --update-fill:#ffd277; --update-ink:#382100; --update-edge:#efb34a; }
+    #mark-read, .panel header .updated, .workspace-bar .updated {
+      background:var(--update-fill); color:var(--update-ink); border-color:var(--update-edge);
+    }
     .panel header .updated, .workspace-bar .updated {
       display:inline-flex; align-items:center; gap:5px;
-      background:var(--update-fill); color:var(--update-ink);
-      border:1px solid var(--update-edge); border-radius:99px;
+      border-width:1px; border-style:solid; border-radius:99px;
       padding:2px 8px; font:650 12px/1.4 system-ui;
     }
     .updated::before {content:""; width:6px; height:6px; border-radius:50%; background:currentColor}
-    .panel header button.updated:hover {background:var(--update-fill); text-decoration:underline}
+    #mark-read:hover, .panel header button.updated:hover {background:var(--update-fill); text-decoration:underline}
     .panel:has(.updated:not([hidden])) > header {box-shadow:inset 4px 0 var(--update-edge)}
     @media (prefers-reduced-motion: no-preference) {
       .panel header .updated:not([hidden]) {animation:update-arrived 850ms ease-out 1}
