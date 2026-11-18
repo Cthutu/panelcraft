@@ -17,6 +17,7 @@ pub enum Action {
     CreatePanel,
     UpdatePanel,
     DeletePanel,
+    ApplyRefresh,
     SetData,
     DeleteData,
 }
@@ -211,6 +212,32 @@ impl Store {
                             s.panels[pos].html = html;
                         }
                     }
+                }
+                Action::ApplyRefresh => {
+                    let id = required(&c.panel_id,"panel_id")?;
+                    let panel = s.panels.iter_mut().find(|p|p.id==id).ok_or("Panel not found in this space")?;
+                    if c.expected_revision.is_none() { return Err("A refresh requires expected_revision".into()); }
+                    let patch = match c.value.as_ref() {
+                        Some(v) => Some(v.as_object().ok_or("setData must be an object")?),
+                        None => None,
+                    };
+                    if c.html.is_none() && patch.is_none() { return Err("Missing refresh result".into()); }
+                    let mut changed = false;
+                    if let Some(html) = c.html {
+                        if html != panel.html { panel.html = html; changed = true; }
+                    }
+                    if let Some(patch) = patch {
+                        for (key,value) in patch {
+                            if key.trim().is_empty() { return Err("Shared-data keys must be nonempty".into()); }
+                            if s.data.get(key) != Some(value) {
+                                s.data.insert(key.clone(),value.clone());
+                                s.data_revision = s.revision + 1;
+                                changed = true;
+                            }
+                        }
+                    }
+                    if !changed { return Ok(json!({"changed":false})); }
+                    panel.updated_revision = s.revision + 1;
                 }
                 Action::SetData => {
                     s.data_revision = s.revision + 1;

@@ -67,6 +67,23 @@ Sign in to github.com as the named account. The worker receives `source.account`
 and `source.pullRequests`, including review requests and latest submitted reviews.
 The credential stays with the CLI. See the [PR panel script](examples/github-authored-prs.js).
 
+To update shared data, return `{setData: {branches: source.repos}}` instead
+of HTML. PanelCraft applies the named JSON keys in one revision-checked write
+and keeps the panel renderer and other keys intact. An identical result shows
+**Already up to date** without adding an unread marker.
+
+The `// @source local-git-branches` directive returns `source.repos` for
+directories listed in `git-repos.txt` beside the database (one path per line,
+blank lines and comments allowed). Alternatively, set `PANELCRAFT_GIT_REPOS`
+to a PATH-separated list. Append a GitHub login to the directive to include
+that author's PR metadata from the active GitHub CLI account. Git operations
+are read-only. Ahead/behind counts compare against the last locally fetched
+origin refs. A failed scan leaves the previous snapshot intact.
+
+The grid uses the available window width and height. Its CSS defaults are
+400–1600 px wide and 240–1000 px tall per panel. On narrow screens panels
+fit the viewport; additional rows scroll vertically.
+
 During execution the button shows **Refreshing…** and disables repeat clicks.
 A successful save triggers the panel and space update badges. On an error or
 revision conflict, the dashboard reports the failure and keeps the saved content.

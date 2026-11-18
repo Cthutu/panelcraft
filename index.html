@@ -465,6 +465,12 @@
     .panel header h2 {margin-right:auto}
     .panel header {justify-content:flex-start}
     [data-sort-kind].drop-target {outline:2px solid #449b77;outline-offset:-2px}
+    :root {--panel-min-width:400px;--panel-max-width:1600px;--panel-min-height:240px;--panel-max-height:1000px}
+    .app {display:flex;flex-direction:column;min-height:100dvh}
+    .app > main {flex:1;display:flex;flex-direction:column;min-width:0}
+    .grid {flex:1;align-content:stretch;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--panel-min-width)),1fr));grid-auto-rows:minmax(var(--panel-min-height),1fr)}
+    .grid > .panel {width:100%;max-width:var(--panel-max-width);max-height:var(--panel-max-height);justify-self:center;display:flex;flex-direction:column}
+    .panel > iframe {flex:1;min-height:0;height:0}
     body.sorting .panel iframe {pointer-events:none}
   </style>
   <div class="app">
@@ -514,7 +520,7 @@
         ><textarea id="edit-spec" rows="3" required></textarea
         ><label for="edit-html">HTML · CSS and JavaScript can be included</label
         ><textarea id="edit-html" rows="13" spellcheck="false"></textarea>
-        <label for="edit-script">Optional refresh script · return HTML using data and html</label>
+        <label for="edit-script">Optional refresh script · return HTML or {setData: {key: value}}</label>
         <textarea id="edit-script" rows="4" spellcheck="false"></textarea>
       </div>
       <p class="error" id="edit-error" role="alert"></p>
@@ -932,8 +938,12 @@ await panelcraft.deleteData('scores');</pre>
         function receive(event) {
           if (event.source !== runner.contentWindow) return;
           const output = event.data;
-          if (typeof output?.result === "string") finish(null, output.result);
-          else finish(String(output?.error || "Refresh script must return HTML as a string"));
+          const result = output?.result;
+          if (typeof result === "string") finish(null, {html:result});
+          else if (result && typeof result === "object" && Object.keys(result).length === 1 &&
+            result.setData && typeof result.setData === "object" && !Array.isArray(result.setData))
+            finish(null, {value:result.setData});
+          else finish(String(output?.error || "Refresh script must return HTML or {setData: {key: value}}"));
         }
         const timer = setTimeout(() => finish("Refresh timed out"), 15000);
         addEventListener("message", receive);
@@ -962,18 +972,20 @@ await panelcraft.deleteData('scores');</pre>
         const directive = panel.update_script.split("\n",1)[0].trim();
         let source = null;
         if (directive.startsWith("// @source")) {
-          const match = /^\/\/ @source github-authored-prs ([a-z0-9-]{1,39})$/i.exec(directive);
-          if (!match) throw Error("Unknown refresh source or invalid account");
-          const response = await fetch("/sources/github-authored-prs", {
+          const prs = /^\/\/ @source github-authored-prs ([a-z0-9-]{1,39})$/i.exec(directive);
+          const branches = /^\/\/ @source local-git-branches(?: ([a-z0-9-]{1,39}))?$/i.exec(directive);
+          if (!prs && !branches) throw Error("Unknown refresh source or invalid account");
+          const response = await fetch(prs ? "/sources/github-authored-prs" : "/sources/local-git-branches", {
             method:"POST", headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({account:match[1]})
+            body:JSON.stringify(prs ? {account:prs[1]} : {account:branches[1] || ""})
           });
           if (!response.ok) throw Error(await response.text());
           source = await response.json();
         }
-        const html = await runRefreshScript(panel, snapshot.data, source);
-        await api("update_panel", {space_id:frame.space, panel_id:frame.id,
-          expected_revision:snapshot.revision, html});
+        const result = await runRefreshScript(panel, snapshot.data, source);
+        const saved = await api("apply_refresh", {space_id:frame.space, panel_id:frame.id,
+          expected_revision:snapshot.revision, ...result});
+        if (saved.changed === false) toast("Already up to date");
         await refresh();
       } catch (error) {
         toast("Panel refresh failed: " + error.message);

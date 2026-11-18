@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -15,6 +15,7 @@ try {
   if (!e.cause) throw e;
 }
 const temp = await mkdtemp(join(tmpdir(), "panelcraft-test-"));
+const fixtureRepo = join(temp, "local-repo");
 let server, browser;
 async function start() {
   server = spawn(
@@ -23,7 +24,7 @@ async function start() {
     ),
     [],
     {
-      env: { ...process.env, PANELCRAFT_DB: join(temp, "test.db") },
+      env: { ...process.env, PANELCRAFT_DB: join(temp, "test.db"), PANELCRAFT_GIT_REPOS:fixtureRepo },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -78,6 +79,10 @@ async function tool(args) {
   return JSON.parse(r.content[0].text);
 }
 try {
+  await mkdir(fixtureRepo);
+  const git = (...args) => execFileSync("git", ["-C", fixtureRepo, ...args]);
+  git("init", "-b", "main");
+  git("-c","user.name=Tester","-c","user.email=test@example.org","-c","commit.gpgSign=false","commit","--allow-empty","-m","Initial");
   await start();
   const init = await rpc("initialize", {
     protocolVersion: "2025-11-25",
@@ -87,6 +92,8 @@ try {
   assert.equal(init.serverInfo.name, "PanelCraft");
   const tools = await rpc("tools/list", {});
   assert.equal(tools.tools.length, 2);
+  const schema = tools.tools.find(t => t.name === "panelcraft").inputSchema;
+  assert.ok(Object.hasOwn(schema.properties,"update_script"));
   const space = await tool({ action: "create_space", name: "MCP test" });
   let state = await tool({
     action: "create_panel",
@@ -340,6 +347,32 @@ try {
   await page.getByText("Panel refresh failed: Example failure").waitFor();
   assert.equal(await refreshCard.locator(".updated:visible").count(),0);
   assert.ok(await refreshCard.frameLocator("iframe").getByText("Updated standings").isVisible());
+  git("branch","new-dashboard-branch");
+  const renderer = (await api("read",{space_id:league.id})).panels.find(p=>p.id===first.id).html;
+  await api("update_panel",{space_id:league.id,panel_id:first.id,update_script:
+    "// @source local-git-branches\nreturn {setData:{branches:source.repos,repoCount:source.repos.length}};"});
+  await page.waitForFunction(() => current.panels.some(p=>p.update_script?.includes("repoCount")));
+  await button.click();
+  await page.waitForFunction(()=>current?.data.repoCount===1);
+  const refreshed = await api("read",{space_id:league.id});
+  assert.ok(refreshed.data.branches[0].branches.some(b=>b.name==="new-dashboard-branch"));
+  assert.equal(refreshed.panels.find(p=>p.id===first.id).html,renderer);
+  assert.ok(refreshed.data.matches);
+  await page.locator("#mark-read").click();
+  await button.click();
+  await page.getByText("Already up to date",{exact:true}).waitFor();
+  assert.equal((await api("read",{space_id:league.id})).revision,refreshed.revision);
+  assert.equal(await cards.locator(".updated:visible").count(),0);
+
+  await page.setViewportSize({width:1200,height:850});
+  const rect = await cards.first().boundingBox();
+  assert.ok(rect.height>600 && rect.width>=400);
+  await page.setViewportSize({width:2400,height:1800});
+  const large = await cards.first().boundingBox();
+  assert.ok(large.width<=1600 && large.height<=1000);
+  await page.setViewportSize({width:360,height:650});
+  const small = await cards.first().boundingBox();
+  assert.ok(small.width<=360 && small.height>=240);
   console.log(
     "PASS: MCP CRUD, restart persistence, origin protection, UI edits, league updates, space isolation, stale-write protection, mobile layout.",
   );

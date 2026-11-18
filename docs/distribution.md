@@ -57,6 +57,12 @@ signed-in account's open PRs and reviewer details.
 
 ## Keep your data
 
+For the local branch source, put one repository directory per line in
+`git-repos.txt` beside the database, or set `PANELCRAFT_GIT_REPOS` using your
+platform's PATH separator. Use `// @source local-git-branches` as the refresh
+script's first line. Append a GitHub login to include PR metadata from `gh`.
+Remote comparisons use the last fetched refs. Refresh does not fetch or prune.
+
 PanelCraft saves spaces, panels and shared data in `data/panelcraft.db`
 relative to the directory where you start the server. Use the same working
 directory on subsequent runs, or set `PANELCRAFT_DB` to an absolute database
