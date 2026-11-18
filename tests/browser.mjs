@@ -345,6 +345,21 @@ try {
   await page.locator("#mark-read").click();
   await button.click();
   await page.getByText("Panel refresh failed: Example failure").waitFor();
+  const popup = page.locator("#toast");
+  for (const theme of ["light","dark"]) {
+    if (await page.locator("html").getAttribute("data-theme") !== theme) await page.locator("#theme").click();
+    const contrast = await popup.evaluate(node => {
+      const luminance = color => color.match(/\d+/g).slice(0,3)
+        .map(Number).map(v => v/255).map(v => v<=0.04045 ? v/12.92 : ((v+0.055)/1.055)**2.4)
+        .reduce((sum,v,i) => sum + v*[0.2126,0.7152,0.0722][i],0);
+      const style = getComputedStyle(node);
+      const values = [style.color,style.backgroundColor].map(luminance).sort((a,b)=>b-a);
+      return (values[0]+0.05)/(values[1]+0.05);
+    });
+    assert.ok(contrast>=4.5, theme+" toast contrast: "+contrast);
+  }
+  await popup.getByRole("button",{name:"Dismiss"}).click();
+  await popup.waitFor({state:"hidden"});
   assert.equal(await refreshCard.locator(".updated:visible").count(),0);
   assert.ok(await refreshCard.frameLocator("iframe").getByText("Updated standings").isVisible());
   git("branch","new-dashboard-branch");

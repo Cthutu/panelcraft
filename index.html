@@ -332,12 +332,25 @@
       position: fixed;
       bottom: 22px;
       right: 22px;
-      max-width: 400px;
-      padding: 13px 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      max-width: min(480px, calc(100vw - 44px));
+      max-height: 50vh;
+      overflow: auto;
+      overflow-wrap: anywhere;
+      padding: 13px 16px;
       background: var(--ink);
-      color: white;
+      color: var(--paper);
       border-radius: 10px;
       z-index: 10;
+    }
+    #toast button {
+      flex: none;
+      padding: 2px 6px;
+      background: transparent;
+      color: inherit;
+      border: 1px solid currentColor;
     }
     #toast:empty {
       display: none;
@@ -632,10 +645,18 @@ await panelcraft.deleteData('scores');</pre>
     };
     systemTheme.addEventListener("change", applyTheme);
     applyTheme();
-    function toast(message) {
-      $("#toast").textContent = message;
+    function toast(message, {dismissible = false} = {}) {
+      const popup = $("#toast");
+      const close = () => popup.replaceChildren();
       clearTimeout(toast.timer);
-      toast.timer = setTimeout(() => ($("#toast").textContent = ""), 5000);
+      popup.replaceChildren(el("span", "", message));
+      if (dismissible) {
+        const dismiss = el("button", "", "Dismiss");
+        dismiss.onclick = close;
+        popup.append(dismiss);
+      } else {
+        toast.timer = setTimeout(close, 5000);
+      }
     }
     async function api(action, args = {}) {
       const r = await fetch("/api", {
@@ -1121,7 +1142,7 @@ await panelcraft.deleteData('scores');</pre>
         if (saved.changed === false) toast("Already up to date");
         await refresh();
       } catch (error) {
-        toast("Panel refresh failed: " + error.message);
+        toast("Panel refresh failed: " + error.message, {dismissible:true});
       } finally {
         runningRefreshes.delete(frame.id);
         showRefreshState(frames.get(frame.id) || frame);
