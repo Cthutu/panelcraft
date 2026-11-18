@@ -60,8 +60,12 @@ The script is an async JavaScript function body receiving `data` (the space
 hashmap snapshot) and `html` (the existing markup). Return the replacement
 HTML as a string. For example, `return '<p>Items: ' + data.items.length + '</p>';`
 renders a count from a shared array. Escape untrusted text included in markup.
-The sandboxed worker has a 15-second timeout and no network or MCP access.
-External sources need an authorized provider to populate the data first.
+The sandboxed worker has a 15-second timeout. For open pull requests, put
+`// @source github-authored-prs YOUR-LOGIN` on the first line. Before running the
+script, the server invokes the local GitHub CLI with a fixed read-only query.
+Sign in to github.com as the named account. The worker receives `source.account`
+and `source.pullRequests`, including review requests and latest submitted reviews.
+The credential stays with the CLI. See the [PR panel script](examples/github-authored-prs.js).
 
 During execution the button shows **Refreshing…** and disables repeat clicks.
 A successful save triggers the panel and space update badges. On an error or

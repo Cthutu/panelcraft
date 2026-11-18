@@ -48,6 +48,13 @@ server machine. A running server returns `{"application":"panelcraft"}`.
 The MCP endpoint is local to that machine. A hosted client needs a local
 connection mechanism to reach it.
 
+## Refresh a GitHub panel
+
+For a GitHub PR refresh panel, install GitHub CLI on the machine running
+PanelCraft and sign in with `gh auth login`. The script's first line declares
+`// @source github-authored-prs YOUR-LOGIN`. Press **Refresh** to fetch the
+signed-in account's open PRs and reviewer details.
+
 ## Keep your data
 
 PanelCraft saves spaces, panels and shared data in `data/panelcraft.db`

@@ -28,7 +28,11 @@ def main():
         if item["reason"] == "compiler-artifact"
         and item["target"]["name"] == "panelcraft" and item.get("executable")
     )
-    output = ROOT / "dist" / f"panelcraft-{host}.zip"
+    metadata = json.loads(subprocess.check_output(
+        ["cargo", "metadata", "--locked", "--format-version=1", "--no-deps"], cwd=ROOT,
+    ))
+    version = next(pkg["version"] for pkg in metadata["packages"] if pkg["name"] == "panelcraft")
+    output = ROOT / "dist" / f"panelcraft-{version}-{host}.zip"
     output.parent.mkdir(exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=output.parent, delete=False) as staging:
         temporary = Path(staging.name)

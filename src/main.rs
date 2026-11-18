@@ -1,3 +1,4 @@
+mod github;
 mod store;
 use axum::{
     Json, Router,
@@ -36,7 +37,7 @@ impl Mcp {
         )
     }
     #[tool(
-        description = "Manage isolated dashboard spaces, panels and shared JSON data. Use read with space_id to discover existing panels and their specifications/HTML/data. Actions: create_space/update_space/delete_space; create_panel (name,specification,html), update_panel (panel_id and any changed fields), delete_panel; set_data (key,value), delete_data (key). All except list/create_space require space_id. Pass expected_revision from read for safe writes. Panel HTML runs sandboxed: await panelcraft.getData(), await panelcraft.setData(key,value), await panelcraft.deleteData(key), panelcraft.subscribe(callback). No cross-space access or external scripts/network. create_panel and update_panel accept optional update_script: async JavaScript function body receiving data (space JSON snapshot) and html (previous markup), returning replacement HTML as a string. Runs on user Refresh in an isolated worker without network or MCP access. Attach only when the available inputs support a useful refresh; empty string removes the button. Save source and refresh instructions in specification; fetch external information using your own tools."
+        description = "Manage isolated dashboard spaces, panels and shared JSON data. Use read with space_id to discover existing panels and their specifications/HTML/data. Actions: create_space/update_space/delete_space; create_panel (name,specification,html), update_panel (panel_id and any changed fields), delete_panel; set_data (key,value), delete_data (key). All except list/create_space require space_id. Pass expected_revision from read for safe writes. Panel HTML runs sandboxed: await panelcraft.getData(), await panelcraft.setData(key,value), await panelcraft.deleteData(key), panelcraft.subscribe(callback). No cross-space access or external scripts/network. create_panel and update_panel accept optional update_script: async JavaScript function body receiving data (space JSON snapshot) and html (previous markup), returning replacement HTML as a string. Runs on user Refresh in an isolated worker without network or MCP access. For authenticated GitHub PRs put // @source github-authored-prs LOGIN on the first line and read source.pullRequests (GitHub GraphQL PullRequest nodes) and source.account. Attach only when the available inputs support a useful refresh; empty string removes the button. Save source and refresh instructions in specification; fetch external information using your own tools."
     )]
     fn panelcraft(&self, Parameters(command): Parameters<Command>) -> CallToolResult {
         self.result(self.store.execute(command))
@@ -54,7 +55,7 @@ impl Mcp {
 impl ServerHandler for Mcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("PanelCraft", "0.1.0"))
+            .with_server_info(Implementation::new("PanelCraft", env!("CARGO_PKG_VERSION")))
     }
 }
 async fn command(State(store): State<Store>, Json(c): Json<Command>) -> Response {
@@ -163,6 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(|| async { Json(json!({"application":"panelcraft"})) }),
         )
         .route("/api", post(command))
+        .route("/sources/github-authored-prs", post(github::authored_prs))
         .nest_service("/mcp", mcp)
         .layer(DefaultBodyLimit::max(4 * 1024 * 1024))
         .layer(middleware::from_fn(local_only))
