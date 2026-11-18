@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  />
+  <title>PanelCraft</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #22352e;
+      --muted: #778179;
+      --line: #e1e6de;
+      --green: #29634c;
+      --paper: #f6f7f2;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font:
+        14px/1.5 system-ui,
+        sans-serif;
+    }
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 9px 13px;
+    }
+    button:hover {
+      background: #eef3eb;
+    }
+    button:focus-visible,
+    a:focus-visible {
+      outline: 3px solid #92b6a2;
+      outline-offset: 2px;
+    }
+    .primary {
+      background: var(--green);
+      border-color: var(--green);
+      color: white;
+    }
+    .primary:hover {
+      background: #204e3d;
+    }
+    .quiet {
+      border-color: transparent;
+      background: transparent;
+    }
+    .danger {
+      color: #b04c38;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 246px 1fr;
+      min-height: 100vh;
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      background: #eef1e9;
+      padding: 28px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .brand {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-weight: 750;
+      font-size: 21px;
+      letter-spacing: -0.8px;
+    }
+    .logo {
+      background: var(--green);
+      color: white;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      font-size: 24px;
+    }
+    small,
+    .muted {
+      color: var(--muted);
+    }
+    .eyebrow {
+      font-size: 10px;
+      letter-spacing: 1.7px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+    .nav {
+      display: grid;
+      gap: 5px;
+    }
+    .nav button {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      text-align: left;
+      background: transparent;
+      border-color: transparent;
+    }
+    .nav button.active {
+      background: white;
+      border-color: var(--line);
+      box-shadow: 0 2px 4px #243b2310;
+    }
+    .nav .count {
+      margin-left: auto;
+      background: #e6ece2;
+      border-radius: 5px;
+      padding: 0 6px;
+      font-size: 11px;
+    }
+    .aside-bottom {
+      margin-top: auto;
+      font-size: 12px;
+    }
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #5b9571;
+    }
+    .dot.off {
+      background: #b04c38;
+    }
+    main {
+      min-width: 0;
+      padding: 0 38px 40px;
+    }
+    .topbar {
+      height: 79px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .breadcrumb span {
+      color: var(--ink);
+    }
+    .heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin: 35px 0 24px;
+    }
+    h1 {
+      font-size: 32px;
+      letter-spacing: -1.3px;
+      line-height: 1.2;
+      margin: 7px 0 9px;
+    }
+    h2 {
+      font-size: 17px;
+      margin: 0;
+    }
+    p {
+      margin: 8px 0;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .workspace-meta {
+      display: flex;
+      gap: 24px;
+      font-size: 12px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 18px;
+      margin-bottom: 24px;
+    }
+    .workspace-meta strong {
+      color: var(--ink);
+      font-weight: 550;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      overflow: hidden;
+      box-shadow: 0 4px 15px #28362a04;
+    }
+    .panel header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #edf0e9;
+      padding: 14px 17px;
+      gap: 8px;
+    }
+    .panel h2 {
+      font-size: 14px;
+    }
+    .panel button {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+    .panel iframe {
+      border: 0;
+      width: 100%;
+      height: 390px;
+      display: block;
+      background: white;
+    }
+    .empty {
+      grid-column: 1/-1;
+      text-align: center;
+      border: 1px dashed #cbd6c6;
+      border-radius: 14px;
+      padding: 65px 20px;
+      background: #fafbf7;
+    }
+    .empty .glyph {
+      font-size: 38px;
+      color: #72917b;
+      margin-bottom: 12px;
+    }
+    .empty p {
+      max-width: 420px;
+      margin: 12px auto 25px;
+      color: var(--muted);
+    }
+    .empty .actions {
+      justify-content: center;
+    }
+    .footer-note {
+      margin-top: 24px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    dialog {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 26px;
+      max-width: 740px;
+      width: calc(100% - 32px);
+      max-height: 90vh;
+      color: var(--ink);
+      box-shadow: 0 24px 100px #142b2430;
+    }
+    dialog::backdrop {
+      background: #122b244d;
+      backdrop-filter: blur(3px);
+    }
+    dialog header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      margin: 14px 0 6px;
+    }
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #cfd8cc;
+      border-radius: 7px;
+      padding: 10px;
+      background: #fcfdf9;
+      color: var(--ink);
+    }
+    textarea {
+      resize: vertical;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    dialog footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .error {
+      color: #a63c2f;
+      white-space: pre-wrap;
+      font-size: 12px;
+    }
+    code {
+      background: #edf1e9;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #f2f5ed;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    #toast {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      max-width: 400px;
+      padding: 13px 20px;
+      background: var(--ink);
+      color: white;
+      border-radius: 10px;
+      z-index: 10;
+    }
+    #toast:empty {
+      display: none;
+    }
+    [hidden] {
+      display: none !important;
+    }
+    .data-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 0;
+    }
+    .data-row code {
+      flex: 1;
+      overflow-wrap: anywhere;
+    }
+    @media (min-width: 1500px) {
+      main {
+        padding-left: 60px;
+        padding-right: 60px;
+      }
+      .panel iframe {
+        height: 390px;
+      }
+    }
+    @media (max-width: 950px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .app {
+        grid-template-columns: 200px 1fr;
+      }
+      main {
+        padding: 0 20px 30px;
+      }
+      .heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+    @media (max-width: 600px) {
+      .app {
+        display: block;
+      }
+      aside {
+        padding: 16px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        gap: 12px;
+      }
+      .nav {
+        display: flex;
+        overflow: auto;
+      }
+      .nav button {
+        white-space: nowrap;
+      }
+      .aside-bottom,
+      aside > .eyebrow {
+        display: none;
+      }
+      .topbar {
+        height: 62px;
+      }
+      .heading {
+        margin-top: 24px;
+      }
+      .workspace-meta {
+        gap: 14px;
+      }
+      h1 {
+        font-size: 28px;
+      }
+    }
+    .app {display:block}
+    .workspace-bar {display:flex; align-items:center; gap:10px; padding:7px 16px; border-bottom:1px solid var(--line); background:var(--surface,white)}
+    .workspace-bar .nav {display:flex; min-width:0; overflow:auto}
+    .workspace-bar button {white-space:nowrap; padding:5px 9px}
+    .workspace-bar .nav button.active {background:var(--paper)}
+    .utilities {display:flex; align-items:center; gap:8px; margin-left:auto}
+    .connection {margin:0;font-size:12px}
+    main {padding:0 16px 16px}
+    .heading {flex-direction:row;align-items:center; flex-wrap:wrap;gap:6px;margin:10px 0}
+    .heading h1 {font-size:21px; margin:0}
+    .heading button,.panel header button {padding:5px 9px}
+    .grid {gap:12px}
+    .panel header {padding:6px 12px}
+    #delete-space-dialog ul {max-height:35vh;overflow:auto}
+    :root[data-theme="dark"] {color-scheme:dark;--ink:#e4ece7;--muted:#abb8af;--line:#435049;--paper:#171d19;--surface:#222b25}
+    [data-theme="dark"] :is(button,.panel,dialog,.empty,input,textarea,pre,code,.count) {background:var(--surface);color:var(--ink);border-color:var(--line)}
+    [data-theme="dark"] button:hover {background:#35433a}
+    [data-theme="dark"] .primary {background:#326a50;color:white}
+    [data-theme="dark"] .danger,[data-theme="dark"] .error {color:#ffada1}
+    [data-theme="dark"] .panel header {border-color:var(--line)}
+    [data-theme="dark"] .panel iframe {filter:invert(.91) hue-rotate(180deg);color-scheme:light}
+    @media(max-width:760px){
+      .workspace-bar {flex-wrap:wrap;gap:6px;padding:6px 10px}
+      .workspace-bar .nav {order:1;width:100%}
+      .workspace-bar .nav:empty {display:none}
+      .utilities .connection {display:none}
+      main {padding:0 10px 12px}
+      .heading h1 {font-size:18px}
+    }
+  </style>
+  <div class="app">
+    <header class="workspace-bar">
+      <div class="brand"><span class="logo">▦</span>PanelCraft</div>
+      <nav class="nav" id="spaces" aria-label="Panel spaces"></nav>
+      <button id="new-space">＋ New space</button>
+      <div class="utilities">
+        <span class="connection"><i class="dot" id="dot"></i><span id="status">Connecting…</span></span>
+        <button id="help" class="quiet" aria-label="Help and MCP connection">Help</button>
+        <button id="theme" aria-pressed="false">Dark mode</button>
+      </div>
+    </header>
+    <main>
+      <div class="heading">
+        <h1 id="title">Your spaces</h1>
+        <div class="actions" id="space-actions" hidden>
+          <button id="data-button">Shared data</button>
+          <button id="edit-space">Manage space</button>
+          <button id="add-panel" class="primary">＋ Add panel</button>
+        </div>
+      </div>
+      <section class="grid" id="panels" aria-label="Panels"></section>
+    </main>
+  </div>
+  <dialog id="delete-space-dialog" aria-labelledby="delete-space-title">
+    <h2 id="delete-space-title"></h2>
+    <p id="delete-space-detail"></p><ul id="delete-space-panels"></ul>
+    <p>Shared data in this space will also be deleted. This cannot be undone.</p>
+    <footer><button data-close autofocus>Cancel</button><button id="confirm-delete-space" class="danger">Delete space</button></footer>
+    <p class="error" id="delete-space-error" role="alert"></p>
+  </dialog>
+  <dialog id="editor">
+    <form id="edit-form">
+      <header>
+        <h2 id="editor-title"></h2>
+        <button type="button" class="quiet" data-close aria-label="Close">
+          ✕
+        </button>
+      </header>
+      <label for="edit-name">Name</label
+      ><input id="edit-name" required maxlength="150" />
+      <div id="panel-fields">
+        <label for="edit-spec"
+          >Specification · what this panel is for and how to refresh it</label
+        ><textarea id="edit-spec" rows="3" required></textarea
+        ><label for="edit-html">HTML · CSS and JavaScript can be included</label
+        ><textarea id="edit-html" rows="13" spellcheck="false"></textarea>
+      </div>
+      <p class="error" id="edit-error" role="alert"></p>
+      <footer>
+        <button type="button" class="danger quiet" id="delete-item">
+          Delete
+        </button>
+        <div class="actions">
+          <button type="button" data-close>Cancel</button
+          ><button class="primary" type="submit">Save changes</button>
+        </div>
+      </footer>
+    </form>
+  </dialog>
+  <dialog id="data-dialog">
+    <header>
+      <div>
+        <h2>Shared data</h2>
+        <small>Available only to panels in this space.</small>
+      </div>
+      <button class="quiet" data-close aria-label="Close">✕</button>
+    </header>
+    <div id="data-keys"></div>
+    <form id="data-form">
+      <label for="data-key">Key</label><input id="data-key" required /><label
+        for="data-value"
+        >Value · valid JSON</label
+      ><textarea id="data-value" rows="8" required>{}</textarea>
+      <p class="error" id="data-error" role="alert"></p>
+      <footer><span></span><button class="primary">Save key</button></footer>
+    </form>
+  </dialog>
+  <dialog id="help-dialog">
+    <header>
+      <h2>A workspace your AI can maintain</h2>
+      <button class="quiet" data-close aria-label="Close">✕</button>
+    </header>
+    <p>
+      Create a space, then ask your AI to add or update panels. Every panel has
+      a name, a specification that preserves its purpose, and HTML content.
+    </p>
+    <p>Connect an MCP client using Streamable HTTP:</p>
+    <pre>http://127.0.0.1:8765/mcp</pre>
+    <p>
+      The tools are <code>list_spaces</code> and <code>panelcraft</code>. Ask it
+      to read the space before making changes so it can reuse your existing
+      panels.
+    </p>
+    <p>
+      Example: “In my PRs space, update the panels for PRs I created and PRs
+      awaiting my review. Fetch the latest information from GitHub.”
+    </p>
+    <p>Panel scripts have a scoped data API:</p>
+    <pre>
+const data = await panelcraft.getData();
+await panelcraft.setData('scores', { home: 2, away: 1 });
+panelcraft.subscribe(data => render(data));
+await panelcraft.deleteData('scores');</pre>
+    <p class="muted">
+      Spaces are isolated. Panel scripts cannot access other spaces, the parent
+      page, or the network. The AI fetches external information with its own
+      tools. Keep this local server running while using your dashboard.
+    </p>
+  </dialog>
+  <div id="toast" role="status"></div>
+  <script>
+    "use strict";
+    const $ = (s) => document.querySelector(s),
+      el = (tag, cls, text) => {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined) e.textContent = text;
+        return e;
+      };
+    let spaces = [],
+      current = null,
+      selected = localStorage.getItem("panelcraft.space"),
+      frames = new Map(),
+      editing = null,
+      busy = false,
+      refreshing = false;
+    const systemTheme = matchMedia("(prefers-color-scheme: dark)");
+    function applyTheme() {
+      const theme = localStorage.getItem("panelcraft.theme") || (systemTheme.matches ? "dark" : "light");
+      document.documentElement.dataset.theme = theme;
+      $("#theme").setAttribute("aria-pressed", String(theme === "dark"));
+    }
+    $("#theme").onclick = () => {
+      localStorage.setItem("panelcraft.theme", document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+      applyTheme();
+    };
+    systemTheme.addEventListener("change", applyTheme);
+    applyTheme();
+    function toast(message) {
+      $("#toast").textContent = message;
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => ($("#toast").textContent = ""), 5000);
+    }
+    async function api(action, args = {}) {
+      const r = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...args }),
+      });
+      const v = await r.json();
+      if (!r.ok) throw Error(v.error || "Request failed");
+      return v;
+    }
+    function connected(ok) {
+      $("#dot").classList.toggle("off", !ok);
+      $("#status").textContent = ok ? "Server connected" : "Server unavailable";
+    }
+    async function refresh() {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        spaces = await api("list");
+        if (!spaces.some((s) => s.id === selected))
+          selected = spaces[0]?.id || null;
+        const next = selected
+          ? await api("read", { space_id: selected })
+          : null;
+        if (next?.id !== current?.id || next?.revision !== current?.revision) {
+          current = next;
+          render();
+        } else renderNav();
+        connected(true);
+      } catch (e) {
+        connected(false);
+        if (!current && !spaces.length) render();
+      } finally {
+        refreshing = false;
+      }
+    }
+    function select(id) {
+      selected = id;
+      localStorage.setItem("panelcraft.space", id);
+      refresh();
+    }
+    function renderNav() {
+      $("#spaces").replaceChildren(
+        ...spaces.map((s) => {
+          const b = el("button", s.id === selected ? "active" : "");
+          b.append(
+            el("span", "", "▦"),
+            el("span", "", s.name),
+            el("span", "count", s.panel_count),
+          );
+          b.onclick = () => select(s.id);
+          return b;
+        }),
+      );
+    }
+    function render() {
+      renderNav();
+      $("#space-actions").hidden = !current;
+      $("#title").textContent = current?.name || "Your spaces";
+      const grid = $("#panels");
+      if (!current || !current.panels.length) {
+        frames.clear();
+        grid.replaceChildren();
+        const box = el("div", "empty");
+        box.append(
+          el("div", "glyph", "▦"),
+          el(
+            "h2",
+            "",
+            current
+              ? "Room for your next idea"
+              : "Everything useful, in one place.",
+          ),
+          el(
+            "p",
+            "",
+            current
+              ? "Add a panel yourself, or connect your AI and ask it to build something here."
+              : "Create an isolated space for your projects, reviews, or next league season. Your AI can take it from there.",
+          ),
+        );
+        const actions = el("div", "actions"),
+          button = el(
+            "button",
+            "primary",
+            current ? "＋ Add your first panel" : "＋ Create a space",
+          );
+        button.onclick = () => openEditor(current ? "panel" : "space");
+        const demo = el("button", "", "Try the league demo");
+        demo.onclick = () => run(demo, seedDemo);
+        actions.append(button, demo);
+        box.append(actions);
+        grid.append(box);
+        return;
+      }
+      for (const [id, f] of frames) {
+        if (
+          f.space !== current.id ||
+          !current.panels.some((p) => p.id === id)
+        ) {
+          f.card.remove();
+          frames.delete(id);
+        }
+      }
+      grid.querySelector(".empty")?.remove();
+      for (const p of current.panels) {
+        let f = frames.get(p.id);
+        if (!f) {
+          const card = el("article", "panel"),
+            head = el("header"),
+            title = el("h2", "", p.name),
+            edit = el("button", "quiet", "Edit ↗"),
+            iframe = el("iframe");
+          iframe.setAttribute("sandbox", "allow-scripts");
+          iframe.title = p.name;
+          edit.onclick = () => openEditor("panel", p.id);
+          head.append(title, edit);
+          card.append(head, iframe);
+          grid.append(card);
+          f = { card, title, iframe, space: current.id, html: null };
+          frames.set(p.id, f);
+        }
+        f.title.textContent = p.name;
+        f.title.title = p.specification;
+        f.iframe.title = p.name;
+        if (f.html !== p.html) {
+          f.html = p.html;
+          f.iframe.srcdoc = panelDocument(p.html);
+        } else
+          f.iframe.contentWindow.postMessage(
+            {
+              channel: "panelcraft",
+              event: "data",
+              data: current.data,
+              revision: current.revision,
+            },
+            "*",
+          );
+      }
+    }
+    function bridge() {
+      let sequence = 0,
+        revision = null;
+      const pending = new Map(),
+        listeners = new Set();
+      function call(method, args = {}) {
+        return new Promise((resolve, reject) => {
+          const id = ++sequence;
+          const timer = setTimeout(() => {
+            pending.delete(id);
+            reject(Error("PanelCraft request timed out"));
+          }, 15000);
+          pending.set(id, { resolve, reject, timer });
+          parent.postMessage(
+            { channel: "panelcraft", id, method, revision, ...args },
+            "*",
+          );
+        });
+      }
+      addEventListener("message", (e) => {
+        if (e.source !== parent || e.data?.channel !== "panelcraft") return;
+        const m = e.data;
+        if (Number.isInteger(m.revision)) revision = m.revision;
+        if (m.event === "data") {
+          for (const cb of listeners) {
+            try {
+              cb(m.data);
+            } catch (err) {
+              console.error(err);
+            }
+          }
+          return;
+        }
+        const p = pending.get(m.id);
+        if (p) {
+          clearTimeout(p.timer);
+          pending.delete(m.id);
+          m.error ? p.reject(Error(m.error)) : p.resolve(m.data);
+        }
+      });
+      // Open GitHub PR and Markdown file links through the host so panel frames keep their sandbox.
+      addEventListener("click", (event) => {
+        const link = event.target.closest?.("a[href]");
+        if (!event.isTrusted || !link || link.target !== "_blank") return;
+        if (new URL(link.href).origin !== "https://github.com") return;
+        event.preventDefault();
+        call("openPullRequest", { url: link.href }).catch(console.error);
+      });
+      window.panelcraft = Object.freeze({
+        getData: () => call("get"),
+        setData: (key, value) => call("set", { key, value }),
+        deleteData: (key) => call("delete", { key }),
+        subscribe: (cb) => {
+          listeners.add(cb);
+          return () => listeners.delete(cb);
+        },
+      });
+    }
+    function panelDocument(html) {
+      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'"><style>body{font:14px/1.6 system-ui,sans-serif;color:#22352e;margin:20px}*{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #edf0e9}th{font-size:11px;color:#778179;font-weight:500}h2{font-size:18px}small{color:#778179}</style><script>(${bridge.toString()})()<\/script></head><body>${html}</body></html>`;
+    }
+    addEventListener("message", async (e) => {
+      const m = e.data;
+      if (m?.channel !== "panelcraft" || !Number.isInteger(m.id)) return;
+      const f = [...frames.values()].find(
+        (f) => f.iframe.contentWindow === e.source && f.space === current?.id,
+      );
+      if (!f) return;
+      const reply = (result) =>
+        e.source.postMessage(
+          { channel: "panelcraft", id: m.id, ...result },
+          "*",
+        );
+      const space = current.id;
+      try {
+        if (m.method === "openPullRequest") {
+          const url = new URL(m.url);
+          if (!navigator.userActivation.isActive ||
+              url.origin !== "https://github.com" || url.username || url.password ||
+              !(/^\/[\w.-]+\/[\w.-]+\/pull\/\d+\/?$/.test(url.pathname) ||
+                /^\/[\w.-]+\/[\w.-]+\/blob\/[^?#]+\.md$/i.test(url.pathname)))
+            throw Error("Expected a user-activated GitHub pull request or Markdown file link");
+          window.open(url.origin + url.pathname, "_blank", "noopener,noreferrer");
+          reply({ data: null });
+          return;
+        }
+        const fresh = await api("read", { space_id: space });
+        if (m.method === "get") {
+          reply({ data: fresh.data, revision: fresh.revision });
+          return;
+        }
+        if (!["set", "delete"].includes(m.method) || typeof m.key !== "string")
+          throw Error("Unsupported panel operation");
+        if (!Number.isInteger(m.revision))
+          throw Error("Read shared data before editing it");
+        const result = await api(
+          m.method === "set" ? "set_data" : "delete_data",
+          {
+            space_id: space,
+            key: m.key,
+            value: m.value,
+            expected_revision: m.revision,
+          },
+        );
+        reply({ data: result.data, revision: result.revision });
+        await refresh();
+      } catch (err) {
+        reply({ error: err.message });
+      }
+    });
+    async function run(button, fn) {
+      if (busy) return;
+      busy = true;
+      if (button) button.disabled = true;
+      try {
+        await fn();
+      } catch (e) {
+        toast(e.message);
+      } finally {
+        busy = false;
+        if (button) button.disabled = false;
+      }
+    }
+    function openEditor(type, id = null) {
+      editing = { type, id, space: current?.id, revision: current?.revision };
+      const p =
+        id && type === "panel" ? current.panels.find((p) => p.id === id) : null;
+      $("#editor-title").textContent = (id ? "Edit " : "New ") + type;
+      $("#edit-name").value = p?.name || (id ? current.name : "");
+      $("#edit-spec").value = p?.specification || "";
+      $("#edit-html").value =
+        p?.html ||
+        "<h2>Hello, PanelCraft.</h2>\n<p>A little space for something useful.</p>";
+      $("#panel-fields").hidden = type !== "panel";
+      $("#edit-spec").required = type === "panel";
+      $("#delete-item").hidden = !id;
+      $("#delete-item").textContent = "Delete " + type;
+      $("#edit-error").textContent = "";
+      $("#editor").showModal();
+      $("#edit-name").focus();
+    }
+    $("#edit-form").onsubmit = async (e) => {
+      e.preventDefault();
+      await run(e.submitter, async () => {
+        try {
+          const { type, id, space, revision } = editing;
+          const args = {
+            space_id: space,
+            panel_id: id,
+            name: $("#edit-name").value,
+            expected_revision: id ? revision : undefined,
+          };
+          if (type === "panel") {
+            args.specification = $("#edit-spec").value;
+            args.html = $("#edit-html").value;
+          }
+          const result = await api(`${id ? "update" : "create"}_${type}`, args);
+          if (type === "space") selected = result.id;
+          $("#editor").close();
+          await refresh();
+          toast("Saved");
+        } catch (err) {
+          $("#edit-error").textContent = err.message;
+        }
+      });
+    };
+    $("#delete-item").onclick = () =>
+      run($("#delete-item"), async () => {
+        if (editing.type === "space") {
+          const snapshot = await api("read", { space_id: editing.space });
+          const dialog = $("#delete-space-dialog");
+          dialog.dataset.space = snapshot.id;
+          dialog.dataset.revision = snapshot.revision;
+          $("#delete-space-title").textContent = 'Delete “' + snapshot.name + '”?';
+          $("#delete-space-detail").textContent = snapshot.panels.length
+            ? "The following panels will be permanently deleted:"
+            : "This space contains no panels.";
+          $("#delete-space-panels").replaceChildren(...snapshot.panels.map(panel => el("li", "", panel.name)));
+          $("#delete-space-error").textContent = "";
+          $("#editor").close();
+          dialog.showModal();
+          return;
+        }
+        if (!confirm("Delete this panel?")) return;
+        await api(`delete_${editing.type}`, {
+          space_id: editing.space,
+          panel_id: editing.id,
+          expected_revision: editing.revision,
+        });
+        $("#editor").close();
+        await refresh();
+      });
+    $("#confirm-delete-space").onclick = () => run($("#confirm-delete-space"), async () => {
+      const dialog = $("#delete-space-dialog");
+      try {
+        await api("delete_space", {space_id:dialog.dataset.space, expected_revision:Number(dialog.dataset.revision)});
+        dialog.close();
+        await refresh();
+      } catch (err) {
+        $("#delete-space-error").textContent = err.message + ". Cancel and reopen to review the current panel list.";
+      }
+    });
+    function showData() {
+      const space = current.id,
+        revision = current.revision;
+      $("#data-dialog").dataset.space = space;
+      $("#data-dialog").dataset.revision = revision;
+      $("#data-keys").replaceChildren(
+        ...Object.entries(current.data).map(([key, value]) => {
+          const row = el("div", "data-row"),
+            edit = el("button", "", "Edit"),
+            del = el("button", "quiet danger", "Delete");
+          edit.onclick = () => {
+            $("#data-key").value = key;
+            $("#data-value").value = JSON.stringify(value, null, 2);
+          };
+          del.onclick = () =>
+            run(del, async () => {
+              if (!confirm(`Delete shared key "${key}"?`)) return;
+              await api("delete_data", {
+                space_id: space,
+                key,
+                expected_revision: revision,
+              });
+              await refresh();
+              showData();
+            });
+          row.append(el("code", "", key), edit, del);
+          return row;
+        }),
+      );
+      if (!$("#data-dialog").open) $("#data-dialog").showModal();
+    }
+    $("#data-form").onsubmit = (e) => {
+      e.preventDefault();
+      run(e.submitter, async () => {
+        try {
+          await api("set_data", {
+            space_id: $("#data-dialog").dataset.space,
+            expected_revision: Number($("#data-dialog").dataset.revision),
+            key: $("#data-key").value,
+            value: JSON.parse($("#data-value").value),
+          });
+          $("#data-error").textContent = "";
+          await refresh();
+          showData();
+          toast("Shared data saved");
+        } catch (err) {
+          $("#data-error").textContent = err.message;
+        }
+      });
+    };
+    document
+      .querySelectorAll("[data-close]")
+      .forEach((b) => (b.onclick = () => b.closest("dialog").close()));
+    $("#new-space").onclick = () => openEditor("space");
+    $("#add-panel").onclick = () => openEditor("panel");
+    $("#edit-space").onclick = () => openEditor("space", current.id);
+    $("#data-button").onclick = showData;
+    $("#help").onclick = () =>
+      $("#help-dialog").showModal();
+    async function seedDemo() {
+      let s = await api("create_space", { name: "Sunday League · Demo" });
+      selected = s.id;
+      await api("set_data", {
+        space_id: s.id,
+        key: "matches",
+        value: [
+          { home: "Northside", away: "Riverside", h: 2, a: 1 },
+          { home: "Park Athletic", away: "Old Town", h: null, a: null },
+          { home: "Northside", away: "Old Town", h: null, a: null },
+          { home: "Riverside", away: "Park Athletic", h: null, a: null },
+        ],
+      });
+      const table = `<small>FIFA 26 · SAMPLE LEAGUE</small><h2>The race to the top</h2><table><thead><tr><th>Club</th><th>P</th><th>GD</th><th>Pts</th></tr></thead><tbody id="rows"></tbody></table><p><small>Updates when a result is recorded in Fixtures.</small></p><script>function render(data){const teams={};for(const m of data.matches||[]){for(const n of [m.home,m.away])teams[n]??={p:0,gd:0,pts:0};if(m.h===null||m.a===null)continue;const h=teams[m.home],a=teams[m.away];h.p++;a.p++;h.gd+=m.h-m.a;a.gd+=m.a-m.h;h.pts+=m.h>m.a?3:m.h===m.a?1:0;a.pts+=m.a>m.h?3:m.a===m.h?1:0}const body=document.getElementById('rows');body.replaceChildren();for(const [n,t]of Object.entries(teams).sort((a,b)=>b[1].pts-a[1].pts||b[1].gd-a[1].gd)){const tr=document.createElement('tr');for(const v of [n,t.p,t.gd,t.pts]){const td=document.createElement('td');td.textContent=v;tr.append(td)}body.append(tr)}}panelcraft.getData().then(render);panelcraft.subscribe(render);<\/script>`;
+      const fixtures = `<style>.match{display:grid;grid-template-columns:1fr 48px 48px 1fr 55px;gap:7px;align-items:center;border-bottom:1px solid #edf0e9;padding:13px 0;font-size:12px}input{width:48px;padding:6px;border:1px solid #d9e1d4;border-radius:5px}button{background:#29634c;color:white;border:0;border-radius:5px;padding:7px}#message{color:#a63c2f}</style><small>FIFA 26 · SAMPLE LEAGUE</small><h2>Match day, made simple.</h2><div id="matches"></div><p id="message" role="status"></p><script>let matches=[];function render(data){matches=data.matches||[];const root=document.getElementById('matches');root.replaceChildren();matches.forEach((m,i)=>{const row=document.createElement('div');row.className='match';const home=document.createElement('span'),away=document.createElement('span');home.textContent=m.home;away.textContent=m.away;const h=document.createElement('input'),a=document.createElement('input');h.type=a.type='number';h.min=a.min=0;h.max=a.max=99;h.setAttribute('aria-label',m.home+' score');a.setAttribute('aria-label',m.away+' score');h.value=m.h??'';a.value=m.a??'';const b=document.createElement('button');b.textContent='Save';b.onclick=async()=>{if(h.value===''||a.value===''||!h.checkValidity()||!a.checkValidity())return;const next=structuredClone(matches);next[i].h=Number(h.value);next[i].a=Number(a.value);b.disabled=true;try{await panelcraft.setData('matches',next);document.getElementById('message').textContent='Result saved'}catch(e){document.getElementById('message').textContent=e.message}finally{b.disabled=false}};row.append(home,h,a,away,b);root.append(row)})}panelcraft.getData().then(render);panelcraft.subscribe(render);<\/script>`;
+      await api("create_panel", {
+        space_id: s.id,
+        name: "League table",
+        specification:
+          "Demo FIFA 26 league table. Derive played, goal difference and points (win 3, draw 1) from shared matches. Sort by points then goal difference. Subscribe to data changes.",
+        html: table,
+      });
+      await api("create_panel", {
+        space_id: s.id,
+        name: "Fixtures & results",
+        specification:
+          "Demo FIFA 26 fixtures. Shared matches is an array of {home,away,h,a}; null scores mean unplayed. Allow entering and saving results, updating the same space shared data.",
+        html: fixtures,
+      });
+      await refresh();
+      toast("Demo space created");
+    }
+    render();
+    refresh();
+    setInterval(refresh, 1500);
+  </script>
+</html>

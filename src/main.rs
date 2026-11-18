@@ -1,0 +1,166 @@
+mod store;
+use axum::{
+    Json, Router,
+    extract::{DefaultBodyLimit, Request, State},
+    http::StatusCode,
+    middleware::{self, Next},
+    response::{Html, IntoResponse, Response},
+    routing::{get, post},
+};
+use rmcp::{
+    ServerHandler,
+    handler::server::wrapper::Parameters,
+    model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerConfig},
+    tool, tool_handler, tool_router,
+    transport::streamable_http_server::{
+        StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+    },
+};
+use serde_json::{Value, json};
+use store::{Command, Store};
+const URL: &str = "http://127.0.0.1:8765";
+
+#[derive(Clone)]
+struct Mcp {
+    store: Store,
+}
+#[tool_router]
+impl Mcp {
+    #[tool(
+        description = "Discover all PanelCraft spaces, their IDs, revisions and panel counts. Read a space with panelcraft to discover panel specifications before creating duplicates."
+    )]
+    fn list_spaces(&self) -> CallToolResult {
+        self.result(
+            self.store
+                .execute(serde_json::from_value(json!({"action":"list"})).unwrap()),
+        )
+    }
+    #[tool(
+        description = "Manage isolated dashboard spaces, panels and shared JSON data. Use read with space_id to discover existing panels and their specifications/HTML/data. Actions: create_space/update_space/delete_space; create_panel (name,specification,html), update_panel (panel_id and any changed fields), delete_panel; set_data (key,value), delete_data (key). All except list/create_space require space_id. Pass expected_revision from read for safe writes. Panel HTML runs sandboxed: await panelcraft.getData(), await panelcraft.setData(key,value), await panelcraft.deleteData(key), panelcraft.subscribe(callback). No cross-space access or external scripts/network. Save source and refresh instructions in specification; fetch external information using your own tools."
+    )]
+    fn panelcraft(&self, Parameters(command): Parameters<Command>) -> CallToolResult {
+        self.result(self.store.execute(command))
+    }
+}
+impl Mcp {
+    fn result(&self, result: Result<Value, String>) -> CallToolResult {
+        match result {
+            Ok(v) => CallToolResult::success(vec![ContentBlock::text(v.to_string())]),
+            Err(e) => CallToolResult::error(vec![ContentBlock::text(e)]),
+        }
+    }
+}
+#[tool_handler]
+impl ServerHandler for Mcp {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new("PanelCraft", "0.1.0"))
+    }
+}
+async fn command(State(store): State<Store>, Json(c): Json<Command>) -> Response {
+    match tokio::task::spawn_blocking(move || store.execute(c)).await {
+        Ok(Ok(value)) => Json(value).into_response(),
+        Ok(Err(error)) => (
+            if error.starts_with("Conflict:") {
+                StatusCode::CONFLICT
+            } else {
+                StatusCode::BAD_REQUEST
+            },
+            Json(json!({"error":error})),
+        )
+            .into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Storage task failed").into_response(),
+    }
+}
+async fn local_only(req: Request, next: Next) -> Response {
+    let host = req.headers().get("host").and_then(|v| v.to_str().ok());
+    let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
+    if !matches!(host, Some("127.0.0.1:8765" | "localhost:8765"))
+        || origin.is_some_and(|o| o != URL && o != "http://localhost:8765")
+    {
+        return (
+            StatusCode::FORBIDDEN,
+            "Only local, same-origin access is allowed",
+        )
+            .into_response();
+    }
+    let mut response = next.run(req).await;
+    response
+        .headers_mut()
+        .insert("x-content-type-options", "nosniff".parse().unwrap());
+    response
+        .headers_mut()
+        .insert("referrer-policy", "no-referrer".parse().unwrap());
+    response
+        .headers_mut()
+        .insert("cache-control", "no-store".parse().unwrap());
+    response
+}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let arg = std::env::args().nth(1).unwrap_or_default();
+    if arg == "--open" {
+        webbrowser::open(URL)?;
+        return Ok(());
+    }
+    let path = std::env::var("PANELCRAFT_DB").unwrap_or_else(|_| "data/panelcraft.db".into());
+    if let Some(parent) = std::path::Path::new(&path)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+    let store = Store::open(&path)?;
+    let mcp_store = store.clone();
+    let mcp = StreamableHttpService::new(
+        move || {
+            Ok(Mcp {
+                store: mcp_store.clone(),
+            })
+        },
+        LocalSessionManager::default().into(),
+        StreamableHttpServerConfig::default()
+            .with_legacy_session_mode(false)
+            .with_json_response(true),
+    );
+    let app = Router::new()
+        .route("/", get(|| async { Html(include_str!("../index.html")) }))
+        .route(
+            "/health",
+            get(|| async { Json(json!({"application":"panelcraft"})) }),
+        )
+        .route("/api", post(command))
+        .nest_service("/mcp", mcp)
+        .layer(DefaultBodyLimit::max(4 * 1024 * 1024))
+        .layer(middleware::from_fn(local_only))
+        .with_state(store);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8765").await?;
+    println!(
+        "\nPanelCraft is running\n\
+         Dashboard: {URL}\n\
+         Storage:   {path}\n\n\
+         Connect your AI via MCP\n\
+         In your MCP client's settings, add a server with:\n\
+           Name:      PanelCraft\n\
+           Transport: Streamable HTTP\n\
+           URL:       {URL}/mcp\n\
+           Auth:      None (local access only)\n\n\
+         Connect, then refresh the client's tool list if needed.\n\
+         Available tools: list_spaces, panelcraft\n\
+         Try asking: \"List my PanelCraft spaces.\"\n\n\
+         The MCP client must run on this machine; cloud clients cannot\n\
+         reach this loopback address. Keep this server running while connected.\n\
+         Press Ctrl+C to stop.\n"
+    );
+    if arg == "--start" {
+        if let Err(e) = webbrowser::open(URL) {
+            eprintln!("Could not open browser: {e}");
+        }
+    }
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await?;
+    Ok(())
+}

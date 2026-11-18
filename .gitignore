@@ -1,0 +1,6 @@
+/target/
+/data/
+/.venv/
+/node_modules/
+/test-results/
+

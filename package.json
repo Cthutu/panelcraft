@@ -1,0 +1,11 @@
+{
+  "name": "panelcraft-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "cargo build --locked && node tests/browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.0"
+  }
+}
