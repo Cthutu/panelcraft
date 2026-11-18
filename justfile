@@ -13,3 +13,7 @@ start:
 test:
     cargo test --locked
 
+# Build a release ZIP for this machine's platform.
+dist:
+    {{ if os() == "windows" { "python" } else { "python3" } }} scripts/dist.py
+

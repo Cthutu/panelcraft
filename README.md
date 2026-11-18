@@ -15,6 +15,7 @@ The first run compiles the server and opens http://127.0.0.1:8765 once it is lis
 - `just serve`: run the server without opening a browser.
 - `just open`: open the UI of an already running server.
 - `just test`: run Rust storage tests.
+- `just dist`: build a native release ZIP in `dist/`, including the executable, HTML and [usage and MCP guide](docs/distribution.md). Packaging requires Python 3.8 or newer.
 
 Create a space or select **Try the league demo**. The demo contains sample fixtures and a league table; saving a score updates both through shared data. No actual GitHub or game data is fetched automatically.
 
