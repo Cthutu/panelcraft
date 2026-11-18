@@ -11,6 +11,7 @@ pub enum Action {
     Read,
     CreateSpace,
     UpdateSpace,
+    SetLayout,
     ReorderSpaces,
     ReorderPanels,
     DeleteSpace,
@@ -25,6 +26,8 @@ pub enum Action {
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct Command {
     pub action: Action,
+    pub layout: Option<Layout>,
+    pub presentation: Option<Presentation>,
     /// Full ordered IDs before and after a reorder.
     pub previous_order: Option<Vec<String>>,
     pub order: Option<Vec<String>>,
@@ -57,8 +60,33 @@ impl Command {
         Ok(order)
     }
 }
+#[derive(Clone, Default, Serialize, Deserialize, schemars::JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum Shape { #[default] Auto, Landscape, Portrait }
+#[derive(Clone, Default, Serialize, Deserialize, schemars::JsonSchema, Debug)]
+pub struct Presentation {
+    #[serde(default)]
+    pub shape: Shape,
+    pub max_width: Option<u16>,
+    pub max_height: Option<u16>,
+}
+#[derive(Clone, Default, Serialize, Deserialize, schemars::JsonSchema, Debug)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum Layout {
+    #[default] Auto,
+    Balanced { percent: u8 },
+    Right { panel_id: String, percent: u8 },
+    Bottom { panel_id: String, percent: u8 },
+}
+impl Layout {
+    fn feature(&self) -> Option<&str> {
+        match self { Self::Right {panel_id,..} | Self::Bottom {panel_id,..} => Some(panel_id), _ => None }
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Panel {
+    #[serde(default)]
+    pub presentation: Presentation,
     #[serde(default)]
     pub updated_revision: u64,
     pub id: String,
@@ -70,6 +98,8 @@ pub struct Panel {
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Space {
+    #[serde(default)]
+    pub layout: Layout,
     pub id: String,
     pub name: String,
     pub revision: u64,
@@ -132,6 +162,7 @@ impl Store {
             }
             if matches!(c.action, Action::CreateSpace) {
                 let s = Space {
+                    layout: Layout::default(),
                     id: uuid::Uuid::new_v4().to_string(),
                     name: required(&c.name, "name")?,
                     revision: 1,
@@ -164,7 +195,24 @@ impl Store {
             if matches!(c.action, Action::ReorderPanels | Action::DeletePanel | Action::UpdateSpace) {
                 s.structure_revision = s.revision + 1;
             }
+            if let Some(p) = &c.presentation {
+                if p.max_width.is_some_and(|w|w<240) || p.max_height.is_some_and(|h|h<240) {
+                    return Err("Panel limits must be at least 240 pixels".into());
+                }
+            }
             match c.action {
+                Action::SetLayout => {
+                    let layout = c.layout.ok_or("layout is required")?;
+                    if layout.feature().is_some_and(|id|!s.panels.iter().any(|p|p.id==id)) {
+                        return Err("Featured panel not found in this space".into());
+                    }
+                    match &layout {
+                        Layout::Right{percent,..}|Layout::Bottom{percent,..}|Layout::Balanced{percent} if !(20..=80).contains(percent) => return Err("Split must be between 20 and 80 percent".into()),
+                        _ => {}
+                    }
+                    s.layout = layout;
+                    s.structure_revision = s.revision + 1;
+                }
                 Action::ReorderPanels => {
                     let ids = s.panels.iter().map(|p| p.id.clone()).collect::<Vec<_>>();
                     let order = c.checked_order(&ids)?;
@@ -180,6 +228,7 @@ impl Store {
                 }
                 Action::UpdateSpace => s.name = required(&c.name, "name")?,
                 Action::CreatePanel => s.panels.push(Panel {
+                    presentation: c.presentation.unwrap_or_default(),
                     updated_revision: s.revision + 1,
                     id: uuid::Uuid::new_v4().to_string(),
                     name: required(&c.name, "name")?,
@@ -195,9 +244,11 @@ impl Store {
                         .position(|p| p.id == panel_id)
                         .ok_or("Panel not found in this space")?;
                     if matches!(c.action, Action::DeletePanel) {
+                        if s.layout.feature() == Some(panel_id.as_str()) { s.layout = Layout::Auto; }
                         s.panels.remove(pos);
                     } else {
                         s.panels[pos].updated_revision = s.revision + 1;
+                        if let Some(p) = c.presentation { s.panels[pos].presentation = p; }
                         if c.name.is_some() {
                             s.panels[pos].name = required(&c.name, "name")?;
                         }

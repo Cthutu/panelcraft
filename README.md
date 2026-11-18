@@ -80,9 +80,16 @@ that author's PR metadata from the active GitHub CLI account. Git operations
 are read-only. Ahead/behind counts compare against the last locally fetched
 origin refs. A failed scan leaves the previous snapshot intact.
 
-The grid uses the available window width and height. Its CSS defaults are
-400–1600 px wide and 240–1000 px tall per panel. On narrow screens panels
-fit the viewport; additional rows scroll vertically.
+The automatic layout balances four ordinary panels in a 2×2 grid on a wide
+screen. In the panel editor, a landscape hint favours width and a portrait
+hint favours height. Maximum width and height are optional pixel values.
+Blank limits let the panel fill its slot.
+
+Use **Edit layout** to preview and save two columns, a full-height panel on
+the right, or a full-width panel below its neighbours. Drag the divider or
+adjust the share slider. Saving applies the arrangement to the space across
+browsers. Narrow windows stack panels in reading order and restore the saved
+arrangement as space becomes available.
 
 During execution the button shows **Refreshing…** and disables repeat clicks.
 A successful save triggers the panel and space update badges. On an error or
