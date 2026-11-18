@@ -50,6 +50,23 @@ Pass `expected_revision` on writes after reading the space to detect concurrent 
 
 Example instruction: “Find my PRs space. Read its panels and specifications. Fetch my authored PRs and review requests using GitHub, then update the existing panels with their latest statuses.” Include the data source and refresh procedure in each panel's specification so another session can resume the work.
 
+## Optional refresh scripts
+
+A panel with a nonempty `update_script` has a Refresh button. Supply the script
+through MCP on `create_panel` or `update_panel`, or enter it in the panel editor.
+Omitting it on update preserves the current script. An empty string removes it.
+
+The script is an async JavaScript function body receiving `data` (the space
+hashmap snapshot) and `html` (the existing markup). Return the replacement
+HTML as a string. For example, `return '<p>Items: ' + data.items.length + '</p>';`
+renders a count from a shared array. Escape untrusted text included in markup.
+The sandboxed worker has a 15-second timeout and no network or MCP access.
+External sources need an authorized provider to populate the data first.
+
+During execution the button shows **Refreshing…** and disables repeat clicks.
+A successful save triggers the panel and space update badges. On an error or
+revision conflict, the dashboard reports the failure and keeps the saved content.
+
 ## Panel API
 
 Panel HTML can include inline styles and scripts. The host injects this API before panel code executes:

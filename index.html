@@ -497,6 +497,8 @@
         ><textarea id="edit-spec" rows="3" required></textarea
         ><label for="edit-html">HTML · CSS and JavaScript can be included</label
         ><textarea id="edit-html" rows="13" spellcheck="false"></textarea>
+        <label for="edit-script">Optional refresh script · return HTML using data and html</label>
+        <textarea id="edit-script" rows="4" spellcheck="false"></textarea>
       </div>
       <p class="error" id="edit-error" role="alert"></p>
       <footer>
@@ -838,13 +840,15 @@ await panelcraft.deleteData('scores');</pre>
           let pressedRevision;
           head.addEventListener("pointerdown", () => { pressedRevision = f.displayed; });
           head.addEventListener("click", event => {
-            if (event.target.closest(".grip")) return;
+            if (event.target.closest(".grip") || event.target === f.refreshButton) return;
             acknowledge(f, event.detail ? pressedRevision ?? f.displayed : f.displayed);
           }, true);
-          head.append(grip, title, badge, edit);
+          const refreshButton = el("button", "quiet", "Refresh");
+          refreshButton.onclick = () => refreshPanel(f);
+          head.append(grip, title, badge, refreshButton, edit);
           card.append(head, iframe);
           grid.append(card);
-          f = { id:p.id, card, title, badge, iframe, space: current.id, html: null };
+          f = { id:p.id, card, title, badge, refreshButton, iframe, space: current.id, html: null };
           frames.set(p.id, f);
         }
         // Avoid touching unrelated frames when order is already correct.
@@ -854,6 +858,8 @@ await panelcraft.deleteData('scores');</pre>
           else grid.insertBefore(f.card,destination || null);
         }
 
+        showRefreshState(f);
+        f.refreshButton.hidden = !p.update_script?.trim();
         f.title.textContent = p.name;
         f.title.title = p.specification;
         f.iframe.title = p.name;
@@ -875,6 +881,77 @@ await panelcraft.deleteData('scores');</pre>
           );
       }
       updateMarkers();
+    }
+    // The opaque iframe creates the worker so it inherits a network-denying CSP
+    // and has no access to the dashboard origin or its storage.
+    function workerHost() {
+      addEventListener("message", event => {
+        if (event.source !== parent) return;
+        const {script, data, html} = event.data;
+        const source = "onmessage = async ({data: {data, html}}) => { try {" +
+          "const result = await (async (data, html) => {" + script +
+          "\n})(data, html); postMessage({result});" +
+          "} catch (e) { postMessage({error:String(e.message || e)}); } };";
+        const url = URL.createObjectURL(new Blob([source], {type:"text/javascript"}));
+        const worker = new Worker(url);
+        URL.revokeObjectURL(url);
+        worker.onmessage = ({data}) => parent.postMessage(data, "*");
+        worker.onerror = e => parent.postMessage({error:e.message || "Script failed"}, "*");
+        worker.postMessage({data, html});
+      }, {once:true});
+    }
+    function runRefreshScript(panel, data) {
+      return new Promise((resolve, reject) => {
+        const runner = el("iframe");
+        runner.hidden = true;
+        runner.setAttribute("sandbox", "allow-scripts");
+        function finish(error, result) {
+          clearTimeout(timer);
+          removeEventListener("message", receive);
+          runner.remove();
+          if (error) reject(new Error(error));
+          else resolve(result);
+        }
+        function receive(event) {
+          if (event.source !== runner.contentWindow) return;
+          const output = event.data;
+          if (typeof output?.result === "string") finish(null, output.result);
+          else finish(String(output?.error || "Refresh script must return HTML as a string"));
+        }
+        const timer = setTimeout(() => finish("Refresh timed out"), 15000);
+        addEventListener("message", receive);
+        runner.onload = () => runner.contentWindow.postMessage({
+          script:panel.update_script, data, html:panel.html
+        }, "*");
+        runner.srcdoc = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; worker-src blob:; connect-src 'none'"><script>(${workerHost.toString()})()<\/script>`;
+        document.body.append(runner);
+      });
+    }
+    const runningRefreshes = new Set();
+    function showRefreshState(frame) {
+      const running = runningRefreshes.has(frame.id);
+      frame.refreshButton.disabled = running;
+      frame.refreshButton.textContent = running ? "Refreshing…" : "Refresh";
+      frame.refreshButton.setAttribute("aria-busy", String(running));
+    }
+    async function refreshPanel(frame) {
+      if (runningRefreshes.has(frame.id)) return;
+      runningRefreshes.add(frame.id);
+      showRefreshState(frame);
+      try {
+        const snapshot = await api("read", {space_id:frame.space});
+        const panel = snapshot.panels.find(p => p.id === frame.id);
+        if (!panel?.update_script?.trim()) throw Error("Refresh script is no longer available");
+        const html = await runRefreshScript(panel, snapshot.data);
+        await api("update_panel", {space_id:frame.space, panel_id:frame.id,
+          expected_revision:snapshot.revision, html});
+        await refresh();
+      } catch (error) {
+        toast("Panel refresh failed: " + error.message);
+      } finally {
+        runningRefreshes.delete(frame.id);
+        showRefreshState(frames.get(frame.id) || frame);
+      }
     }
     function bridge(contentRevision) {
       let consumedDataRevision = 0;
@@ -1036,6 +1113,7 @@ await panelcraft.deleteData('scores');</pre>
       $("#editor-title").textContent = (id ? "Edit " : "New ") + type;
       $("#edit-name").value = p?.name || (id ? current.name : "");
       $("#edit-spec").value = p?.specification || "";
+      $("#edit-script").value = p?.update_script || "";
       $("#edit-html").value =
         p?.html ||
         "<h2>Hello, PanelCraft.</h2>\n<p>A little space for something useful.</p>";
@@ -1061,6 +1139,7 @@ await panelcraft.deleteData('scores');</pre>
           if (type === "panel") {
             args.specification = $("#edit-spec").value;
             args.html = $("#edit-html").value;
+            args.update_script = $("#edit-script").value;
           }
           const result = await api(`${id ? "update" : "create"}_${type}`, args);
           if (type === "space") selected = result.id;

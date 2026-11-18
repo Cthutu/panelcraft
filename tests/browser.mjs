@@ -321,6 +321,25 @@ try {
   assert.match(await tabs.first().textContent(), /Reorder test/);
   assert.equal(await cards.first().locator("h2").textContent(), second.name);
   assert.equal(await cards.locator(".updated:visible").count(),0);
+  const refreshCard = cards.filter({has:page.getByRole("heading",{name:first.name,exact:true})});
+  assert.equal(await refreshCard.getByRole("button",{name:"Refresh",exact:true}).count(),0);
+  await api("update_panel",{space_id:league.id,panel_id:first.id,
+    update_script:"await new Promise(r => setTimeout(r, 350)); return '<h3>Updated standings</h3>';"});
+  const button = refreshCard.getByRole("button",{name:"Refresh",exact:true});
+  await button.waitFor();
+  await page.locator("#mark-read").click();
+  await button.click();
+  assert.ok(await refreshCard.getByRole("button",{name:"Refreshing\u2026"}).isDisabled());
+  await refreshCard.frameLocator("iframe").getByText("Updated standings").waitFor();
+  await refreshCard.locator(".updated:visible").waitFor();
+  await page.locator("#spaces .active .updated").waitFor();
+  await api("update_panel",{space_id:league.id,panel_id:first.id, update_script:"throw Error('Example failure')"});
+  await page.waitForFunction(() => current.panels.some(p => p.update_script?.includes("Example failure")));
+  await page.locator("#mark-read").click();
+  await button.click();
+  await page.getByText("Panel refresh failed: Example failure").waitFor();
+  assert.equal(await refreshCard.locator(".updated:visible").count(),0);
+  assert.ok(await refreshCard.frameLocator("iframe").getByText("Updated standings").isVisible());
   console.log(
     "PASS: MCP CRUD, restart persistence, origin protection, UI edits, league updates, space isolation, stale-write protection, mobile layout.",
   );

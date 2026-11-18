@@ -32,6 +32,8 @@ pub struct Command {
     pub name: Option<String>,
     pub specification: Option<String>,
     pub html: Option<String>,
+    /// Optional async JS function body receiving data and html. An empty string removes it.
+    pub update_script: Option<String>,
     pub key: Option<String>,
     pub value: Option<Value>,
     /// Supply the revision from read to reject a stale write rather than overwrite newer work.
@@ -62,6 +64,8 @@ pub struct Panel {
     pub name: String,
     pub specification: String,
     pub html: String,
+    #[serde(default)]
+    pub update_script: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Space {
@@ -180,6 +184,7 @@ impl Store {
                     name: required(&c.name, "name")?,
                     specification: required(&c.specification, "specification")?,
                     html: c.html.ok_or("html is required")?,
+                    update_script: c.update_script.unwrap_or_default(),
                 }),
                 Action::UpdatePanel | Action::DeletePanel => {
                     let panel_id = required(&c.panel_id, "panel_id")?;
@@ -198,6 +203,9 @@ impl Store {
                         if c.specification.is_some() {
                             s.panels[pos].specification =
                                 required(&c.specification, "specification")?;
+                        }
+                        if let Some(script) = c.update_script {
+                            s.panels[pos].update_script = script;
                         }
                         if let Some(html) = c.html {
                             s.panels[pos].html = html;
