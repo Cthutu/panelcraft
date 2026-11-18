@@ -273,6 +273,54 @@ try {
   await page.locator("#confirm-delete-space").click();
   await page.locator("#delete-space-dialog").waitFor({ state: "hidden" });
   assert.ok(!(await api("list")).some(space => space.id === other.id));
+  const before = await api("read", {space_id:league.id});
+  const [first, second] = before.panels;
+  const cards = page.locator(".panel");
+  await cards.first().locator(".grip").dragTo(cards.nth(1).locator("header"));
+  await page.waitForFunction(name => document.querySelector(".panel h2")?.textContent === name, second.name);
+  const after = await api("read", {space_id:league.id});
+  assert.equal(after.panels[0].id, second.id);
+  await page.locator("#mark-read").click();
+  await api("update_panel", {space_id:league.id,panel_id:first.id,specification:"Changed after acknowledgement"});
+  await cards.filter({has:page.getByRole("heading",{name:first.name,exact:true})}).locator(".updated:visible").waitFor();
+  const changedCard = cards.filter({has:page.getByRole("heading",{name:first.name,exact:true})});
+  const otherCard = cards.filter({has:page.getByRole("heading",{name:second.name,exact:true})});
+  const tabBadge = page.locator("#spaces .active .updated");
+  await api("update_panel", {space_id:league.id,panel_id:second.id,specification:"Second unread panel"});
+  await otherCard.locator(".updated:visible").waitFor();
+  await changedCard.getByRole("button",{name:"Mark this panel as seen"}).press("Enter");
+  await changedCard.locator(".updated").waitFor({state:"hidden"});
+  assert.ok(await tabBadge.isVisible());
+  const inside = otherCard.frameLocator("iframe").locator("body");
+  await inside.click({position:{x:3,y:3}});
+  await tabBadge.waitFor({state:"hidden"});
+
+  // A press begun before another update must not acknowledge the newer revision.
+  await api("update_panel",{space_id:league.id,panel_id:first.id,specification:"Older revision"});
+  await changedCard.locator(".updated:visible").waitFor();
+  const heading = changedCard.locator("h2");
+  await heading.hover();
+  await page.mouse.down();
+  await api("update_panel",{space_id:league.id,panel_id:first.id,specification:"Newer revision"});
+  await page.waitForFunction(() => !!document.querySelector('h2[title="Newer revision"]'));
+  await page.mouse.up();
+  assert.ok(await changedCard.locator(".updated").isVisible());
+  await heading.click();
+  await tabBadge.waitFor({state:"hidden"});
+  await api("update_space",{space_id:league.id,name:before.name});
+  await tabBadge.waitFor();
+  assert.equal(await cards.locator(".updated:visible").count(),0);
+  await page.locator("#mark-read").click();
+  const extra = await api("create_space", {name:"Reorder test"});
+  const tabs = page.locator("#spaces button");
+  await tabs.filter({hasText:extra.name}).dragTo(tabs.first());
+  await page.waitForFunction(() => document.querySelector("#spaces button")?.textContent.includes("Reorder test"));
+  await page.reload();
+  await tabs.filter({hasText:before.name}).click();
+  await page.getByRole("heading",{name:second.name,exact:true}).waitFor();
+  assert.match(await tabs.first().textContent(), /Reorder test/);
+  assert.equal(await cards.first().locator("h2").textContent(), second.name);
+  assert.equal(await cards.locator(".updated:visible").count(),0);
   console.log(
     "PASS: MCP CRUD, restart persistence, origin protection, UI edits, league updates, space isolation, stale-write protection, mobile layout.",
   );

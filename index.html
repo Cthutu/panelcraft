@@ -443,6 +443,12 @@
       main {padding:0 10px 12px}
       .heading h1 {font-size:18px}
     }
+    .updated {color:#765100;background:#ffedba;border-radius:5px;padding:1px 5px;font:600 11px system-ui}
+    .grip {cursor:grab;touch-action:manipulation}
+    .panel header h2 {margin-right:auto}
+    .panel header {justify-content:flex-start}
+    [data-sort-kind].drop-target {outline:2px solid #449b77;outline-offset:-2px}
+    body.sorting .panel iframe {pointer-events:none}
   </style>
   <div class="app">
     <header class="workspace-bar">
@@ -459,6 +465,7 @@
       <div class="heading">
         <h1 id="title">Your spaces</h1>
         <div class="actions" id="space-actions" hidden>
+          <button id="mark-read" hidden>Mark updates seen</button>
           <button id="data-button">Shared data</button>
           <button id="edit-space">Manage space</button>
           <button id="add-panel" class="primary">＋ Add panel</button>
@@ -601,16 +608,129 @@ await panelcraft.deleteData('scores');</pre>
       $("#dot").classList.toggle("off", !ok);
       $("#status").textContent = ok ? "Server connected" : "Server unavailable";
     }
+    // Acknowledgements are per browser. A space revision covers its shared data too.
+    const seen = JSON.parse(localStorage.getItem("panelcraft.seen") || "{}");
+    let baselineReady = localStorage.getItem("panelcraft.seen") !== null;
+    let drag = null;
+    let navSignature = "";
+    function saveSeen() { localStorage.setItem("panelcraft.seen", JSON.stringify(seen)); }
+    const readPanels = JSON.parse(localStorage.getItem("panelcraft.readPanels") || "{}");
+    const clearedSpaces = JSON.parse(localStorage.getItem("panelcraft.clearedSpaces") || "{}");
+    function displayedRevision(panel) {
+      const dataRevision = frames.get(panel.id)?.usesData ? current.data_revision : 0;
+      return Math.max(panel.updated_revision || 0, dataRevision || 0);
+    }
+    function updateMarkers() {
+      if (!current) return;
+      const bulk = seen[current.id] || 0;
+      let unread = (current.structure_revision || 0) > bulk;
+      let dataConsumer = false;
+      for (const panel of current.panels) {
+        const frame = frames.get(panel.id);
+        if (!frame) continue;
+        dataConsumer ||= frame.usesData;
+        frame.displayed = displayedRevision(panel);
+        frame.badge.hidden = frame.displayed <= Math.max(bulk, readPanels[panel.id] || 0);
+        unread ||= !frame.badge.hidden;
+      }
+      unread ||= !dataConsumer && (current.data_revision || 0) > bulk;
+      // Older databases may have space revisions from before change tracking.
+      const tracked = Math.max(current.structure_revision || 0, current.data_revision || 0,
+        ...current.panels.map(p => p.updated_revision || 0));
+      unread ||= current.revision > Math.max(bulk, tracked);
+      const cleared = unread ? 0 : current.revision;
+      if (clearedSpaces[current.id] !== cleared) {
+        clearedSpaces[current.id] = cleared;
+        localStorage.setItem("panelcraft.clearedSpaces", JSON.stringify(clearedSpaces));
+      }
+      $("#mark-read").hidden = !unread;
+      renderNav();
+    }
+    function acknowledge(frame, revision) {
+      if (frame.space !== current?.id || frame.badge.hidden || !Number.isSafeInteger(revision)) return;
+      const acknowledged = Math.min(revision, frame.displayed);
+      if (acknowledged <= Math.max(seen[current.id] || 0, readPanels[frame.id] || 0)) return;
+      readPanels[frame.id] = acknowledged;
+      localStorage.setItem("panelcraft.readPanels", JSON.stringify(readPanels));
+      updateMarkers();
+    }
+    $("#mark-read").onclick = () => {
+      seen[current.id] = current.revision;
+      saveSeen();
+      updateMarkers();
+    };
+    function orderFor(kind) {
+      return (kind === "space" ? spaces : current.panels).map(item => item.id);
+    }
+    async function moveItem(kind, id, target, previous) {
+      if (id === target) return;
+      const order = [...previous];
+      const from = order.indexOf(id), to = order.indexOf(target);
+      if (from < 0 || to < 0) return;
+      order.splice(from, 1);
+      order.splice(to, 0, id);
+      try {
+        const scope = kind === "panel" ? {space_id:current.id, expected_revision:current.revision} : {};
+        await api(kind === "panel" ? "reorder_panels" : "reorder_spaces", {...scope, previous_order:previous, order});
+      } catch (error) { toast(error.message); }
+      await refresh();
+    }
+    function sortable(item, handle, kind, id) {
+      item.dataset.sortKind = kind;
+      handle.draggable = true;
+      handle.title = "Drag to reorder, or use Alt + arrow keys";
+      handle.ondragstart = event => {
+        drag = {kind, id, order:orderFor(kind)};
+        event.dataTransfer.setData("text/plain", id);
+        event.dataTransfer.effectAllowed = "move";
+        document.body.classList.add("sorting");
+      };
+      item.ondragover = event => {
+        if (drag?.kind !== kind) return;
+        event.preventDefault();
+        item.classList.add("drop-target");
+      };
+      item.ondragleave = () => item.classList.remove("drop-target");
+      item.ondrop = event => {
+        if (drag?.kind !== kind) return;
+        event.preventDefault();
+        const source = drag;
+        endDrag();
+        moveItem(kind, source.id, id, source.order);
+      };
+      handle.ondragend = endDrag;
+      handle.onkeydown = event => {
+        if (!event.altKey || !["ArrowUp","ArrowLeft","ArrowDown","ArrowRight"].includes(event.key)) return;
+        event.preventDefault();
+        const order = orderFor(kind);
+        const delta = ["ArrowUp","ArrowLeft"].includes(event.key) ? -1 : 1;
+        const target = order[order.indexOf(id) + delta];
+        if (target) moveItem(kind,id,target,order);
+      };
+    }
+    function endDrag() {
+      drag = null;
+      document.body.classList.remove("sorting");
+      document.querySelectorAll(".drop-target").forEach(item => item.classList.remove("drop-target"));
+    }
     async function refresh() {
-      if (refreshing) return;
+      if (refreshing || drag) return;
       refreshing = true;
       try {
-        spaces = await api("list");
+        const listed = await api("list");
+        if (drag) return;
+        spaces = listed;
+        if (!baselineReady) {
+          for (const space of spaces) seen[space.id] = space.revision;
+          saveSeen();
+          baselineReady = true;
+        }
         if (!spaces.some((s) => s.id === selected))
           selected = spaces[0]?.id || null;
         const next = selected
           ? await api("read", { space_id: selected })
           : null;
+        if (drag) return;
         if (next?.id !== current?.id || next?.revision !== current?.revision) {
           current = next;
           render();
@@ -629,6 +749,9 @@ await panelcraft.deleteData('scores');</pre>
       refresh();
     }
     function renderNav() {
+      const signature = JSON.stringify([selected,spaces,seen,clearedSpaces]);
+      if (signature === navSignature) return;
+      navSignature = signature;
       $("#spaces").replaceChildren(
         ...spaces.map((s) => {
           const b = el("button", s.id === selected ? "active" : "");
@@ -637,6 +760,8 @@ await panelcraft.deleteData('scores');</pre>
             el("span", "", s.name),
             el("span", "count", s.panel_count),
           );
+          if (s.revision > Math.max(seen[s.id] || 0, clearedSpaces[s.id] || 0)) b.append(el("span","updated","Updated"));
+          sortable(b,b,"space",s.id);
           b.onclick = () => select(s.id);
           return b;
         }),
@@ -644,6 +769,7 @@ await panelcraft.deleteData('scores');</pre>
     }
     function render() {
       renderNav();
+      $("#mark-read").hidden = !current || current.revision <= (seen[current.id] || 0);
       $("#space-actions").hidden = !current;
       $("#title").textContent = current?.name || "Your spaces";
       const grid = $("#panels");
@@ -680,6 +806,7 @@ await panelcraft.deleteData('scores');</pre>
         actions.append(button, demo);
         box.append(actions);
         grid.append(box);
+        updateMarkers();
         return;
       }
       for (const [id, f] of frames) {
@@ -703,31 +830,68 @@ await panelcraft.deleteData('scores');</pre>
           iframe.setAttribute("sandbox", "allow-scripts");
           iframe.title = p.name;
           edit.onclick = () => openEditor("panel", p.id);
-          head.append(title, edit);
+          const grip = el("button","quiet grip","⠿");
+          grip.setAttribute("aria-label","Reorder panel");
+          sortable(card, grip, "panel", p.id);
+          const badge = el("button","updated","Updated");
+          badge.setAttribute("aria-label", "Mark this panel as seen");
+          let pressedRevision;
+          head.addEventListener("pointerdown", () => { pressedRevision = f.displayed; });
+          head.addEventListener("click", event => {
+            if (event.target.closest(".grip")) return;
+            acknowledge(f, event.detail ? pressedRevision ?? f.displayed : f.displayed);
+          }, true);
+          head.append(grip, title, badge, edit);
           card.append(head, iframe);
           grid.append(card);
-          f = { card, title, iframe, space: current.id, html: null };
+          f = { id:p.id, card, title, badge, iframe, space: current.id, html: null };
           frames.set(p.id, f);
         }
+        // Avoid touching unrelated frames when order is already correct.
+        const destination = grid.children[current.panels.indexOf(p)];
+        if (destination !== f.card) {
+          if (grid.moveBefore) grid.moveBefore(f.card,destination || null);
+          else grid.insertBefore(f.card,destination || null);
+        }
+
         f.title.textContent = p.name;
         f.title.title = p.specification;
         f.iframe.title = p.name;
         if (f.html !== p.html) {
           f.html = p.html;
-          f.iframe.srcdoc = panelDocument(p.html);
+          f.usesData = false;
+          f.iframe.srcdoc = panelDocument(p.html, p.updated_revision || 0);
         } else
           f.iframe.contentWindow.postMessage(
             {
               channel: "panelcraft",
               event: "data",
+              contentRevision: p.updated_revision || 0,
+              dataRevision: current.data_revision || 0,
               data: current.data,
               revision: current.revision,
             },
             "*",
           );
       }
+      updateMarkers();
     }
-    function bridge() {
+    function bridge(contentRevision) {
+      let consumedDataRevision = 0;
+      let usesData = false;
+      let press;
+      const visibleRevision = () => Math.max(contentRevision, consumedDataRevision);
+      addEventListener("pointerdown", e => {
+        press = {x:e.clientX, y:e.clientY, revision:visibleRevision(), dragged:false};
+      }, true);
+      addEventListener("pointermove", e => {
+        if (press && Math.hypot(e.clientX-press.x,e.clientY-press.y)>5) press.dragged = true;
+      }, true);
+      addEventListener("click", e => {
+        if (!e.isTrusted || (e.detail && press?.dragged)) return;
+        parent.postMessage({channel:"panelcraft", id:0, method:"acknowledge",
+          displayed:e.detail && press ? press.revision : visibleRevision()}, "*");
+      }, true);
       let sequence = 0,
         revision = null;
       const pending = new Map(),
@@ -750,6 +914,8 @@ await panelcraft.deleteData('scores');</pre>
         if (e.source !== parent || e.data?.channel !== "panelcraft") return;
         const m = e.data;
         if (Number.isInteger(m.revision)) revision = m.revision;
+        if (Number.isSafeInteger(m.contentRevision)) contentRevision = m.contentRevision;
+        if (usesData && Number.isSafeInteger(m.dataRevision)) consumedDataRevision = m.dataRevision;
         if (m.event === "data") {
           for (const cb of listeners) {
             try {
@@ -776,17 +942,18 @@ await panelcraft.deleteData('scores');</pre>
         call("openPullRequest", { url: link.href }).catch(console.error);
       });
       window.panelcraft = Object.freeze({
-        getData: () => call("get"),
+        getData: () => { usesData = true; return call("get"); },
         setData: (key, value) => call("set", { key, value }),
         deleteData: (key) => call("delete", { key }),
         subscribe: (cb) => {
+          if (!usesData) { usesData = true; call("subscribe").catch(console.error); }
           listeners.add(cb);
           return () => listeners.delete(cb);
         },
       });
     }
-    function panelDocument(html) {
-      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'"><style>body{font:14px/1.6 system-ui,sans-serif;color:#22352e;margin:20px}*{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #edf0e9}th{font-size:11px;color:#778179;font-weight:500}h2{font-size:18px}small{color:#778179}</style><script>(${bridge.toString()})()<\/script></head><body>${html}</body></html>`;
+    function panelDocument(html, contentRevision) {
+      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'"><style>body{font:14px/1.6 system-ui,sans-serif;color:#22352e;margin:20px}*{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #edf0e9}th{font-size:11px;color:#778179;font-weight:500}h2{font-size:18px}small{color:#778179}</style><script>(${bridge.toString()})(${contentRevision})<\/script></head><body>${html}</body></html>`;
     }
     addEventListener("message", async (e) => {
       const m = e.data;
@@ -802,6 +969,16 @@ await panelcraft.deleteData('scores');</pre>
         );
       const space = current.id;
       try {
+        if (m.method === "acknowledge") {
+          acknowledge(f, m.displayed);
+          return;
+        }
+        if (m.method === "subscribe") {
+          f.usesData = true;
+          updateMarkers();
+          reply({});
+          return;
+        }
         if (m.method === "openPullRequest") {
           const url = new URL(m.url);
           if (!navigator.userActivation.isActive ||
@@ -815,7 +992,9 @@ await panelcraft.deleteData('scores');</pre>
         }
         const fresh = await api("read", { space_id: space });
         if (m.method === "get") {
-          reply({ data: fresh.data, revision: fresh.revision });
+          f.usesData = true;
+          updateMarkers();
+          reply({ data: fresh.data, revision: fresh.revision, dataRevision:fresh.data_revision });
           return;
         }
         if (!["set", "delete"].includes(m.method) || typeof m.key !== "string")
@@ -831,7 +1010,7 @@ await panelcraft.deleteData('scores');</pre>
             expected_revision: m.revision,
           },
         );
-        reply({ data: result.data, revision: result.revision });
+        reply({ data: result.data, revision: result.revision, dataRevision:result.data_revision });
         await refresh();
       } catch (err) {
         reply({ error: err.message });

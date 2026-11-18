@@ -11,6 +11,8 @@ pub enum Action {
     Read,
     CreateSpace,
     UpdateSpace,
+    ReorderSpaces,
+    ReorderPanels,
     DeleteSpace,
     CreatePanel,
     UpdatePanel,
@@ -22,6 +24,9 @@ pub enum Action {
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct Command {
     pub action: Action,
+    /// Full ordered IDs before and after a reorder.
+    pub previous_order: Option<Vec<String>>,
+    pub order: Option<Vec<String>>,
     pub space_id: Option<String>,
     pub panel_id: Option<String>,
     pub name: Option<String>,
@@ -33,8 +38,26 @@ pub struct Command {
     pub expected_revision: Option<u64>,
 }
 
+impl Command {
+    fn checked_order(&self, current: &[String]) -> Result<&[String], String> {
+        if self.previous_order.as_deref() != Some(current) {
+            return Err("Conflict: order changed; try again".into());
+        }
+        let order = self.order.as_deref().ok_or("order is required")?;
+        let unique: std::collections::HashSet<_> = order.iter().collect();
+        if unique.len() != current.len()
+            || order.len() != current.len()
+            || !current.iter().all(|id| unique.contains(id))
+        {
+            return Err("Order must include every current ID exactly once".into());
+        }
+        Ok(order)
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Panel {
+    #[serde(default)]
+    pub updated_revision: u64,
     pub id: String,
     pub name: String,
     pub specification: String,
@@ -45,6 +68,10 @@ pub struct Space {
     pub id: String,
     pub name: String,
     pub revision: u64,
+    #[serde(default)]
+    pub data_revision: u64,
+    #[serde(default)]
+    pub structure_revision: u64,
     pub panels: Vec<Panel>,
     pub data: serde_json::Map<String, Value>,
 }
@@ -60,16 +87,32 @@ fn required(value: &Option<String>, label: &str) -> Result<String, String> {
 impl Store {
     pub fn open(path: &str) -> Result<Self, String> {
         let db = Connection::open(path).map_err(|e| e.to_string())?;
-        db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS spaces (id TEXT PRIMARY KEY, document TEXT NOT NULL);").map_err(|e|e.to_string())?;
+        db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS spaces (id TEXT PRIMARY KEY, document TEXT NOT NULL); CREATE TABLE IF NOT EXISTS space_order (id TEXT PRIMARY KEY, position INTEGER NOT NULL);").map_err(|e|e.to_string())?;
         Ok(Self(Arc::new(Mutex::new(db))))
     }
     pub fn execute(&self, c: Command) -> Result<Value, String> {
         let mut db = self.0.lock().map_err(|_| "Database lock failed")?;
         let tx = db.transaction().map_err(|e| e.to_string())?;
         let result = (|| -> Result<Value, String> {
+            if matches!(c.action, Action::ReorderSpaces) {
+                let mut stmt = tx.prepare("SELECT s.id FROM spaces s LEFT JOIN space_order o USING(id) ORDER BY COALESCE(o.position,s.rowid)").map_err(|e| e.to_string())?;
+                let ids = stmt
+                    .query_map([], |row| row.get(0))
+                    .map_err(|e| e.to_string())?
+                    .collect::<Result<Vec<String>, _>>()
+                    .map_err(|e| e.to_string())?;
+                for (index, id) in c.checked_order(&ids)?.iter().enumerate() {
+                    tx.execute(
+                        "INSERT OR REPLACE INTO space_order VALUES(?1,?2)",
+                        params![id, index as i64 + 1],
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+                return Ok(json!({"saved":true}));
+            }
             if matches!(c.action, Action::List) {
                 let mut stmt = tx
-                    .prepare("SELECT document FROM spaces ORDER BY rowid")
+                    .prepare("SELECT document FROM spaces s LEFT JOIN space_order o USING(id) ORDER BY COALESCE(o.position,s.rowid)")
                     .map_err(|e| e.to_string())?;
                 let rows = stmt
                     .query_map([], |row| row.get::<_, String>(0))
@@ -87,6 +130,8 @@ impl Store {
                     id: uuid::Uuid::new_v4().to_string(),
                     name: required(&c.name, "name")?,
                     revision: 1,
+                    data_revision: 0,
+                    structure_revision: 1,
                     panels: vec![],
                     data: Default::default(),
                 };
@@ -95,6 +140,7 @@ impl Store {
                     params![s.id, serde_json::to_string(&s).unwrap()],
                 )
                 .map_err(|e| e.to_string())?;
+                tx.execute("INSERT INTO space_order SELECT ?1, COALESCE(MAX(COALESCE(o.position,s.rowid)),0)+1 FROM spaces s LEFT JOIN space_order o USING(id) WHERE s.id != ?1", [&s.id]).map_err(|e|e.to_string())?;
                 return Ok(json!(s));
             }
             let id = required(&c.space_id, "space_id")?;
@@ -110,14 +156,26 @@ impl Store {
             if c.expected_revision.is_some_and(|r| r != s.revision) {
                 return Err("Conflict: space changed; read it again before retrying".into());
             }
+            if matches!(c.action, Action::ReorderPanels | Action::DeletePanel | Action::UpdateSpace) {
+                s.structure_revision = s.revision + 1;
+            }
             match c.action {
+                Action::ReorderPanels => {
+                    let ids = s.panels.iter().map(|p| p.id.clone()).collect::<Vec<_>>();
+                    let order = c.checked_order(&ids)?;
+                    s.panels
+                        .sort_by_key(|p| order.iter().position(|id| id == &p.id));
+                }
                 Action::DeleteSpace => {
+                    tx.execute("DELETE FROM space_order WHERE id=?1", [&id])
+                        .map_err(|e| e.to_string())?;
                     tx.execute("DELETE FROM spaces WHERE id=?1", [&id])
                         .map_err(|e| e.to_string())?;
                     return Ok(json!({"deleted":id}));
                 }
                 Action::UpdateSpace => s.name = required(&c.name, "name")?,
                 Action::CreatePanel => s.panels.push(Panel {
+                    updated_revision: s.revision + 1,
                     id: uuid::Uuid::new_v4().to_string(),
                     name: required(&c.name, "name")?,
                     specification: required(&c.specification, "specification")?,
@@ -133,6 +191,7 @@ impl Store {
                     if matches!(c.action, Action::DeletePanel) {
                         s.panels.remove(pos);
                     } else {
+                        s.panels[pos].updated_revision = s.revision + 1;
                         if c.name.is_some() {
                             s.panels[pos].name = required(&c.name, "name")?;
                         }
@@ -146,10 +205,12 @@ impl Store {
                     }
                 }
                 Action::SetData => {
+                    s.data_revision = s.revision + 1;
                     s.data
                         .insert(required(&c.key, "key")?, c.value.unwrap_or(Value::Null));
                 }
                 Action::DeleteData => {
+                    s.data_revision = s.revision + 1;
                     s.data.remove(&required(&c.key, "key")?);
                 }
                 _ => unreachable!(),
