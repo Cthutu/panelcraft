@@ -443,7 +443,24 @@
       main {padding:0 10px 12px}
       .heading h1 {font-size:18px}
     }
-    .updated {color:#765100;background:#ffedba;border-radius:5px;padding:1px 5px;font:600 11px system-ui}
+    :root { --update-fill:#ffe5a1; --update-ink:#543000; --update-edge:#ac6800; }
+    :root[data-theme="dark"] { --update-fill:#ffd277; --update-ink:#382100; --update-edge:#efb34a; }
+    .panel header .updated, .workspace-bar .updated {
+      display:inline-flex; align-items:center; gap:5px;
+      background:var(--update-fill); color:var(--update-ink);
+      border:1px solid var(--update-edge); border-radius:99px;
+      padding:2px 8px; font:650 12px/1.4 system-ui;
+    }
+    .updated::before {content:""; width:6px; height:6px; border-radius:50%; background:currentColor}
+    .panel header button.updated:hover {background:var(--update-fill); text-decoration:underline}
+    .panel:has(.updated:not([hidden])) > header {box-shadow:inset 4px 0 var(--update-edge)}
+    @media (prefers-reduced-motion: no-preference) {
+      .panel header .updated:not([hidden]) {animation:update-arrived 850ms ease-out 1}
+      @keyframes update-arrived {
+        from {box-shadow:0 0 0 0 var(--update-edge)}
+        to {box-shadow:0 0 0 6px transparent}
+      }
+    }
     .grip {cursor:grab;touch-action:manipulation}
     .panel header h2 {margin-right:auto}
     .panel header {justify-content:flex-start}
