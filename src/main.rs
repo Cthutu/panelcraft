@@ -96,6 +96,30 @@ async fn local_only(req: Request, next: Next) -> Response {
         .insert("cache-control", "no-store".parse().unwrap());
     response
 }
+async fn panelcraft_is_running() -> bool {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let probe = async {
+        let mut socket = tokio::net::TcpStream::connect("127.0.0.1:8765").await?;
+        socket
+            .write_all(b"GET /health HTTP/1.0\r\nHost: 127.0.0.1:8765\r\nConnection: close\r\n\r\n")
+            .await?;
+        let mut response = String::new();
+        socket.take(4096).read_to_string(&mut response).await?;
+        let healthy = response
+            .split_once("\r\n\r\n")
+            .is_some_and(|(headers, body)| {
+                headers.split_whitespace().nth(1) == Some("200")
+                    && serde_json::from_str::<Value>(body).ok()
+                        == Some(json!({"application":"panelcraft"}))
+            });
+        Ok::<_, std::io::Error>(healthy)
+    };
+    matches!(
+        tokio::time::timeout(std::time::Duration::from_secs(2), probe).await,
+        Ok(Ok(true))
+    )
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arg = std::env::args().nth(1).unwrap_or_default();
@@ -103,6 +127,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         webbrowser::open(URL)?;
         return Ok(());
     }
+    let listener = match tokio::net::TcpListener::bind("127.0.0.1:8765").await {
+        Ok(listener) => listener,
+        Err(_) if arg == "--start" && panelcraft_is_running().await => {
+            println!("PanelCraft is already running. Opening {URL}");
+            webbrowser::open(URL)?;
+            return Ok(());
+        }
+        Err(error) => return Err(error.into()),
+    };
     let path = std::env::var("PANELCRAFT_DB").unwrap_or_else(|_| "data/panelcraft.db".into());
     if let Some(parent) = std::path::Path::new(&path)
         .parent()
@@ -134,7 +167,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(DefaultBodyLimit::max(4 * 1024 * 1024))
         .layer(middleware::from_fn(local_only))
         .with_state(store);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8765").await?;
     println!(
         "\nPanelCraft is running\n\
          Dashboard: {URL}\n\
